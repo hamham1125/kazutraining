@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>いろフラッシュカード</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #f8f8f8;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    select, button, input {
+      font-size: 1em;
+      padding: 8px;
+      margin: 5px;
+    }
+    #cardArea {
+      margin: 20px auto;
+    }
+    .optionBtn {
+      font-size: 1.5em;
+      margin: 5px;
+      padding: 10px 20px;
+    }
+    #feedback {
+      font-size: 5em;
+      color: red;
+      display: none;
+      margin-top: 20px;
+    }
+    #recordPanel {
+      margin-top: 30px;
+      background: white;
+      padding: 10px;
+      border: 1px solid #ccc;
+      display: none;
+    }
+    .recordList {
+      font-size: 0.8em;
+      max-height: 150px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    #timerDisplay {
+      position: fixed;
+      top: 10px;
+      right: 20px;
+      font-size: 2.7em;
+      background-color: rgba(255,255,255,0.7);
+      padding: 10px 20px;
+      border-radius: 10px;
+    }
+    table {
+      border-collapse: collapse;
+    }
+    td {
+      width: 60px;
+      height: 60px;
+      border: 1px solid black;
+    }
+  </style>
+</head>
+<body>
+  <h1>いろフラッシュカード</h1>
+  <div class="controls">
+   じかん:<input type="number" id="durationInput" value="120" min="1">
+    形式:
+    <select id="modeSelect">
+      <option value="colorOnly">いろだけ</option>
+      <option value="whiteOnly">しろだけ</option>
+      <option value="both">いろ→しろ</option>
+    </select>
+    色の設定:
+    <select id="styleSelect">
+      <option value="single">ひとつのいろ</option>
+      <option value="multi">ランダム</option>
+    </select>
+    いろ:
+    <select id="colorSelect">
+      <option value="red">🔴</option>
+      <option value="blue">🔵</option>
+      <option value="green">🟢</option>
+      <option value="yellow">🟡</option>
+    </select>
+    <button onclick="startSession()">スタート</button>
+    <button onclick="toggleRecord()">きろく</button>
+  </div>
+
+  <div id="timerDisplay">のこり：0びょう</div>
+  <div id="cardArea"></div>
+  <div id="options"></div>
+  <div id="feedback">〇</div>
+
+  <div id="recordPanel">
+    <h3>📊 きろく</h3>
+    <div id="recordList" class="recordList"></div>
+    <canvas id="recordChart" height="75"></canvas>
+  </div>
+
+<script>
+const cardArea = document.getElementById('cardArea');
+const optionsDiv = document.getElementById('options');
+const feedback = document.getElementById('feedback');
+const modeSelect = document.getElementById('modeSelect');
+const styleSelect = document.getElementById('styleSelect');
+const colorSelect = document.getElementById('colorSelect');
+const durationInput = document.getElementById('durationInput');
+const timerDisplay = document.getElementById('timerDisplay');
+const recordPanel = document.getElementById('recordPanel');
+const recordList = document.getElementById('recordList');
+const recordKey = "color_flash_records";
+
+let colorCount = 0;
+let whiteCount = 0;
+let step = 0;
+let correctCount = 0;
+let wrongCount = 0;
+let isRunning = false;
+let timer = null;
+let timerInterval = null;
+
+function getRandomInt(max) {
+  return Math.floor(Math.random() * (max + 1));
+}
+
+function getRandomColor() {
+  const colors = ["red", "blue", "green", "yellow"];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+function generateCard(count, color) {
+  cardArea.innerHTML = '';
+  const table = document.createElement('table');
+  table.style.margin = '0 auto';
+  let idx = 0;
+  for (let row = 0; row < 2; row++) {
+    const tr = document.createElement('tr');
+    for (let col = 0; col < 5; col++) {
+      const td = document.createElement('td');
+      td.style.backgroundColor = (idx < count) ? color : 'white';
+      tr.appendChild(td);
+      idx++;
+    }
+    table.appendChild(tr);
+  }
+  cardArea.appendChild(table);
+}
+
+function showFeedback(mark) {
+  feedback.textContent = mark;
+  feedback.style.display = 'block';
+  setTimeout(() => { feedback.style.display = 'none'; }, 1000);
+}
+
+function createOptions(correct) {
+  optionsDiv.innerHTML = '';
+  const answers = [correct];
+  while (answers.length < 5) {
+    let rand = getRandomInt(10);
+    if (!answers.includes(rand)) answers.push(rand);
+  }
+  shuffle(answers);
+  answers.forEach(num => {
+    const btn = document.createElement('button');
+    btn.className = 'optionBtn';
+    btn.textContent = num;
+    btn.onclick = () => handleAnswer(num);
+    optionsDiv.appendChild(btn);
+  });
+}
+
+function handleAnswer(num) {
+  const mode = modeSelect.value;
+  const expected = (mode === "whiteOnly" || (mode === "both" && step === 1)) ? whiteCount : colorCount;
+
+  if (num === expected) {
+    showFeedback("〇");
+    correctCount++;
+    if (mode === "both" && step === 0) {
+      step = 1;
+      createOptions(whiteCount);
+    } else {
+      nextCard();
+    }
+  } else {
+    showFeedback("×");
+    wrongCount++;
+  }
+}
+
+function nextCard() {
+  step = 0;
+  colorCount = getRandomInt(10);
+  whiteCount = 10 - colorCount;
+  const style = styleSelect.value;
+  let selectedColor = style === "multi" ? getRandomColor() : colorSelect.value;
+  generateCard(colorCount, selectedColor);
+
+  const mode = modeSelect.value;
+  if (mode === "colorOnly") {
+    createOptions(colorCount);
+  } else if (mode === "whiteOnly") {
+    createOptions(whiteCount);
+  } else {
+    createOptions(colorCount);
+  }
+}
+
+function startSession() {
+  const duration = parseInt(durationInput.value);
+  if (isNaN(duration) || duration <= 0) {
+    alert("有効な時間を入力してください");
+    return;
+  }
+
+  isRunning = true;
+  correctCount = 0;
+  wrongCount = 0;
+  timerDisplay.textContent = `のこり：${duration}びょう`;
+  nextCard();
+
+  let remaining = duration;
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    remaining--;
+    timerDisplay.textContent = `のこり：${remaining}びょう`;
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+    }
+  }, 1000);
+
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    isRunning = false;
+    optionsDiv.innerHTML = '';
+    cardArea.innerHTML = '';
+    saveRecord();
+  }, duration * 1000);
+}
+
+function toggleRecord() {
+  recordPanel.style.display = (recordPanel.style.display === 'none') ? 'block' : 'none';
+  if (recordPanel.style.display === 'block') showRecord();
+}
+
+function saveRecord() {
+  const now = new Date().toLocaleDateString('ja-JP');
+  let records = JSON.parse(localStorage.getItem(recordKey) || "[]");
+  records.push({ date: now, correct: correctCount, wrong: wrongCount });
+  if (records.length > 30) records.shift();
+  localStorage.setItem(recordKey, JSON.stringify(records));
+  correctCount = 0;
+  wrongCount = 0;
+}
+
+function showRecord() {
+  const records = JSON.parse(localStorage.getItem(recordKey) || "[]");
+  recordList.innerHTML = records.map(r => `<div>${r.date}：〇${r.correct} ×${r.wrong}</div>`).join("");
+  const ctx = document.getElementById('recordChart').getContext('2d');
+  if (window.recordChart) window.recordChart.destroy();
+  window.recordChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: records.map(r => r.date),
+      datasets: [
+        { label: '正解', data: records.map(r => r.correct), backgroundColor: 'green' },
+        { label: '不正解', data: records.map(r => r.wrong), backgroundColor: 'red' }
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+window.addEventListener('beforeunload', saveRecord);
+</script>
+</body>
+</html>
