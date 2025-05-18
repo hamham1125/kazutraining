@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>かけるかな？（こもじ）</title>
+  <style>
+    body {
+      background-color: #fff7dc;
+      font-family: 'Rounded Mplus 1c', sans-serif;
+      text-align: center;
+      padding-top: 40px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+    .audio-button, .check-button, .next-button, .back-button {
+      font-size: 1.2em;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      margin: 15px;
+      cursor: pointer;
+      transition: transform 0.1s, background-color 0.2s;
+    }
+    .audio-button {
+      background-color: #ffb300;
+    }
+    .audio-button:active {
+      transform: scale(0.95);
+      background-color: #ffa000;
+    }
+    .check-button {
+      background-color: #90caf9;
+    }
+    .check-button:active {
+      transform: scale(0.95);
+      background-color: #64b5f6;
+    }
+    .next-button {
+      background-color: #aed581;
+    }
+    .next-button:active {
+      transform: scale(0.95);
+      background-color: #9ccc65;
+    }
+    .back-button {
+      background-color: #ccc;
+    }
+    .result {
+      font-size: 3em;
+      margin-top: 30px;
+      height: 60px;
+    }
+  </style>
+</head>
+<body>
+  <h1>かけるかな？（こもじ）</h1>
+  <p>おとをきいて、ノートにかいてね</p>
+  <button class="audio-button" onclick="playAudio()">▶ おとをきく</button>
+  <button class="check-button" onclick="showAnswer()">こたえあわせ</button>
+  <button class="next-button" onclick="nextQuestion()">つぎのもんだいにすすむ</button>
+  <div class="result" id="answerDisplay"></div>
+  <button class="back-button" onclick="location.href='alphabet.html'">← モードせんたくがめんにもどる</button>
+
+  <script>
+    const letters = "abcdefghijklmnopqrstuvwxyz".split("");
+    let currentLetter = "";
+
+    function getRandomLetter() {
+      return letters[Math.floor(Math.random() * letters.length)];
+    }
+
+    function playAudio() {
+      if (!currentLetter) return;
+      const utter = new SpeechSynthesisUtterance(currentLetter);
+      utter.lang = 'en-US';
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utter);
+    }
+
+    function showAnswer() {
+      document.getElementById("answerDisplay").textContent = currentLetter;
+    }
+
+    function nextQuestion() {
+      currentLetter = getRandomLetter();
+      document.getElementById("answerDisplay").textContent = "";
+      playAudio();
+    }
+
+    // 初期出題
+    nextQuestion();
+  </script>
+</body>
+</html>

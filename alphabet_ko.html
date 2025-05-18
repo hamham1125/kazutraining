@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>こもじクイズ</title>
+  <style>
+    body {
+      background-color: #fff7dc;
+      font-family: 'Rounded Mplus 1c', sans-serif;
+      text-align: center;
+      padding-top: 40px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 20px;
+    }
+    .options {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 30px;
+    }
+    .option {
+      background-color: #ffd700;
+      border: none;
+      border-radius: 10px;
+      padding: 15px 25px;
+      font-size: 2em;
+      cursor: pointer;
+      transition: transform 0.1s, background-color 0.2s;
+    }
+    .option:active {
+      transform: scale(0.95);
+      background-color: #ffcc00;
+    }
+    .result {
+      font-size: 2em;
+      margin-top: 20px;
+      height: 40px;
+    }
+    .audio-button {
+      margin-top: 10px;
+      font-size: 1.2em;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background-color: #ffb300;
+      transition: transform 0.1s, background-color 0.2s;
+    }
+    .audio-button:active {
+      transform: scale(0.95);
+      background-color: #ffa000;
+    }
+    .back-button {
+      margin-top: 40px;
+      font-size: 1em;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background-color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>こもじクイズ</h1>
+  <button class="audio-button" onclick="playAudio()">▶ おとをきく</button>
+  <div class="options" id="optionButtons"></div>
+  <div class="result" id="resultArea"></div>
+  <button class="back-button" onclick="location.href='alphabet.html'">← モードせんたくがめんにもどる</button>
+
+  <script>
+    const letters = "abcdefghijklmnopqrstuvwxyz".split("");
+    let currentLetter = "";
+
+    function getRandomLetter() {
+      return letters[Math.floor(Math.random() * letters.length)];
+    }
+
+    function getOptions(correct) {
+      let options = new Set([correct]);
+      while (options.size < 5) {
+        const random = letters[Math.floor(Math.random() * letters.length)];
+        options.add(random);
+      }
+      return Array.from(options).sort(() => Math.random() - 0.5);
+    }
+
+    function playAudio() {
+      const utter = new SpeechSynthesisUtterance(currentLetter);
+      utter.lang = 'en-US';
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utter);
+    }
+
+    function showQuestion() {
+      currentLetter = getRandomLetter();
+      document.getElementById("resultArea").textContent = "";
+      const options = getOptions(currentLetter);
+      const buttons = options.map(letter => {
+        return `<button class="option" onclick="checkAnswer('${letter}')">${letter}</button>`;
+      }).join("");
+      document.getElementById("optionButtons").innerHTML = buttons;
+      playAudio();
+    }
+
+    function checkAnswer(selected) {
+      if (selected === currentLetter) {
+        document.getElementById("resultArea").textContent = "〇 せいかい！";
+        setTimeout(showQuestion, 1000);
+      } else {
+        document.getElementById("resultArea").textContent = "✕ もういちど！";
+      }
+    }
+
+    // 初期表示
+    showQuestion();
+  </script>
+</body>
+</html>

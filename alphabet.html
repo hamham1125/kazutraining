@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>アルファベットれんしゅう</title>
+  <style>
+    body {
+      background-color: #fff7dc;
+      font-family: 'Rounded Mplus 1c', sans-serif;
+      text-align: center;
+      padding-top: 50px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 40px;
+    }
+    .mode-button {
+      background-color: #ffd700;
+      border: none;
+      border-radius: 12px;
+      padding: 15px 30px;
+      font-size: 1.2em;
+      margin: 12px;
+      cursor: pointer;
+      width: 280px;
+      transition: transform 0.1s, background-color 0.2s;
+    }
+    .mode-button:active {
+      transform: scale(0.95);
+      background-color: #ffcc00;
+    }
+    .back-button {
+      margin-top: 40px;
+      font-size: 1em;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background-color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>えらんでね（アルファベットれんしゅう）</h1>
+
+  <button class="mode-button" onclick="location.href='alphabet_oo.html'">おおもじ</button><br>
+  <button class="mode-button" onclick="location.href='alphabet_ko.html'">こもじ</button><br>
+  <button class="mode-button" onclick="location.href='alphabet_kakeru_oo.html'">かけるかな？（おおもじ）</button><br>
+  <button class="mode-button" onclick="location.href='alphabet_kakeru_ko.html'">かけるかな？（こもじ）</button><br>
+  <button class="mode-button" onclick="location.href='alphabet_pair.html'">ABCペアクイズ</button><br>
+
+  <button class="back-button" onclick="location.href='index.html'">← モードせんたくがめんにもどる</button>
+</body>
+</html>
