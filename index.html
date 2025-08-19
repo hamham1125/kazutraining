@@ -27,11 +27,18 @@
   </style>
 </head>
 <body>
+  <!--
+    メインメニュー
+
+    仕様変更に合わせて「国語」と「算数」の二つのカテゴリーを最初に表示します。
+    ボタンのスタイルやレイアウトは従来のモード選択画面と統一しています。
+  -->
   <h1>モードを　えらんでね</h1>
-  <button class="menu-button" onclick="location.href='数唱.html'">かずトレーニング</button><br>
-  <button class="menu-button" onclick="location.href='いろフラッシュカード.html'">いろフラッシュカード</button><br>
-  <button class="menu-button" onclick="location.href='kuku.html'">九九れんしゅう</button><br>
-  <button class="menu-button" onclick="location.href='alphabet.html'">アルファベットれんしゅう</button>
+  <!-- 国語カテゴリではアルファベットれんしゅうのみを提供 -->
+  <button class="menu-button" onclick="location.href='国語.html'">国語</button><br>
+  <!-- 算数カテゴリでは３つの練習モードを提供 -->
+  <button class="menu-button" onclick="location.href='算数.html'">算数</button>
 </body>
 </html>
+
 
