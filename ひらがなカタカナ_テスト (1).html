@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ひらがな・カタカナ テスト</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* ========= 共通（アルファベット練習と同系統の見た目） ========= */
+    body { background:#fff7dc; font-family:'Rounded Mplus 1c', system-ui, -apple-system, Segoe UI, sans-serif; text-align:center; margin:0; padding:54px 10px 30px; }
+    h1 { font-size:2em; margin:0 0 14px; }
+
+    /* ボタン類（クリック押し込み表現を復活） */
+    .audio-button, .nav-button, .option { cursor:pointer; user-select:none; transition: transform .08s ease, box-shadow .08s ease; }
+    .audio-button { font-size:1.05em; padding:8px 14px; border-radius:12px; border:none; background:#ffca28; box-shadow:0 4px 0 #f0b400; }
+    .nav-button { font-size:1em; padding:10px 16px; border:none; border-radius:10px; background:#ccc; box-shadow:0 3px 0 #bdbdbd; }
+    .option { min-width:120px; min-height:72px; font-size:2rem; padding:10px 16px; border:none; border-radius:16px; background:#fff; box-shadow:0 4px 0 #bdbdbd; }
+    .audio-button:active, .nav-button:active, .option:active { transform: translateY(2px) scale(0.98); box-shadow:0 2px 0 rgba(0,0,0,.2); }
+
+    /* コントロールバー（1行に収める。狭い時は折返し） */
+    .controls { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center; background:rgba(255,255,255,.88); padding:10px 12px; border-radius:14px; box-shadow:0 2px 0 rgba(0,0,0,.1); }
+    .controls select { font-size:1rem; padding:8px 12px; border-radius:10px; background:#fff; border:1px solid #ddd; }
+    .spacer { width:8px; height:1px; }
+
+    .questionWrap { margin-top:18px; }
+    .bigNotice { font-size:1.1em; color:#333; margin:6px 0 12px; }
+
+    /* 5択エリア */
+    .options { display:flex; justify-content:center; flex-wrap:wrap; gap:16px; margin-top:12px; }
+
+    /* 手書きエリア */
+    .drawWrap { display:none; margin:10px auto 0; max-width:360px; }
+    .canvasBox { position:relative; margin:0 auto; width:320px; height:320px; background:#fff; border-radius:12px; box-shadow:inset 0 0 0 2px #333; }
+    canvas { width:320px; height:320px; touch-action:none; display:block; background:#fff; }
+    /* 4分割ガイド */
+    .grid::before { content:""; position:absolute; inset:0; pointer-events:none; background:
+      linear-gradient(#ddd 1px, transparent 1px) 0 50%/100% 1px,
+      linear-gradient(90deg, #ddd 1px, transparent 1px) 50% 0/1px 100%; }
+
+    .drawTools { display:flex; justify-content:center; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center; }
+    .label { font-size:.95em; opacity:.85; }
+
+    /* フィードバック（〇×） */
+    #feedback { font-size:4.6em; color:#e60000; line-height:1; display:none; margin:10px 0; text-shadow:0 2px 4px rgba(0,0,0,.15); }
+
+    /* 結果 */
+    #resultPanel { margin-top:16px; font-size:1.1em; }
+
+    /* 記録リーダ（左上固定） */
+    #recordToggle { position:fixed; top:10px; left:10px; background:#ffd54f; padding:8px 12px; border-radius:10px; font-size:1em; z-index:1000; border:none; box-shadow:0 3px 0 #f0b400; cursor:pointer; }
+    #recordPanel { position:fixed; top:52px; left:10px; width:min(92vw, 360px); max-height:80vh; overflow:auto; background:#fff; border:2px solid #e0c36a; border-radius:12px; padding:12px; text-align:left; display:none; z-index:1000; }
+    #recordPanel h3 { margin:6px 0 8px; }
+    .recItem { border:1px solid #eee; padding:8px; border-radius:8px; margin-bottom:8px; background:#fafafa; }
+    .recItem summary { cursor:pointer; }
+
+    /* 設定ダイアログ */
+    dialog#settings { border:none; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:16px; }
+    #settings .row { display:flex; align-items:center; gap:10px; }
+    #settings input[type=range] { width:200px; }
+
+    .footer { margin-top:22px; }
+
+    /* DEV パネル */
+    #devPanel { display:none; text-align:left; margin:16px auto; max-width:600px; background:#fffbe6; border:1px solid #e0c36a; padding:10px 12px; border-radius:10px; }
+  </style>
+</head>
+<body>
+  <!-- 記録トグル -->
+  <button id="recordToggle">📊 きろく</button>
+  <div id="recordPanel">
+    <h3>きろく（ローカル保存）</h3>
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+      <button class="nav-button" id="refreshRec">⟳ 更新</button>
+      <button class="nav-button" id="clearRec" style="background:#ffb3b3">🗑 ぜんぶ消す</button>
+    </div>
+    <div id="recordList"></div>
+  </div>
+
+  <h1>ひらがな・カタカナ テスト</h1>
+  <div class="controls">
+    <button id="startBtn" class="nav-button">▶ スタート</button>
+    <button id="resetBtn" class="nav-button">↺ リセット</button>
+    <div class="spacer"></div>
+    <label class="label">文字種：</label>
+    <select id="scriptSel">
+      <option value="hira">ひらがな</option>
+      <option value="kata">カタカナ</option>
+    </select>
+    <label class="label">セット：</label>
+    <select id="setSel">
+      <option value="seion">清音</option>
+      <option value="dakuon">濁音</option>
+      <option value="handakuon">半濁音</option>
+      <option value="yoon">拗音</option>
+      <option value="all">ぜんぶ</option>
+    </select>
+    <label class="label">モード：</label>
+    <select id="modeSel">
+      <option value="choice">5択</option>
+      <option value="hand">手書き（半自動）</option>
+    </select>
+    <button id="openSettings" class="nav-button" title="判定のやさしさ">⚙ 設定</button>
+  </div>
+
+  <div class="questionWrap">
+    <div class="bigNotice" id="prompt">おとをきいて　えらんでね / かいてね</div>
+    <div style="margin-bottom:10px; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+      <button class="audio-button" id="playBtn">▶ おとをきく</button>
+      <button class="audio-button" id="replayBtn" style="display:none">▶ もういっかい</button>
+    </div>
+
+    <!-- 5択 -->
+    <div id="choiceArea" class="options"></div>
+
+    <!-- 手書き -->
+    <div id="handArea" class="drawWrap">
+      <div class="canvasBox grid">
+        <canvas id="draw"></canvas>
+      </div>
+      <div class="drawTools">
+        <button class="nav-button" id="undoBtn">↩ 1つ戻す</button>
+        <button class="nav-button" id="clearBtn">🧽 ぜんぶ消す</button>
+        <button class="audio-button" id="autoBtn">こたえ</button>
+        <span class="label">先生☑（</span>
+        <button class="nav-button" id="markGood" title="〇：正解">〇</button>
+        <button class="nav-button" id="markMaybe" title="△：おしい">△</button>
+        <button class="nav-button" id="markBad" title="×：ちがう">×</button>
+        <span class="label">）</span>
+      </div>
+    </div>
+
+    <div id="feedback">〇</div>
+    <div id="progress" class="bigNotice"></div>
+    <div id="resultPanel"></div>
+  </div>
+
+  <!-- 設定ダイアログ -->
+  <dialog id="settings">
+    <form method="dialog">
+      <h3 style="margin-top:0">⚙ 設定</h3>
+      <div class="row" style="margin:8px 0 12px;">
+        <label style="min-width:6em">やさしさ</label>
+        <input type="range" id="leniency" min="1" max="5" step="1" value="4" />
+        <span id="lenVal">4</span>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end">
+        <button class="nav-button" value="cancel">とじる</button>
+        <button class="nav-button" id="saveSettings" value="default">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="devPanel"></div>
+
+  <div class="footer">
+    <button class="nav-button" onclick="location.href='国語.html'">← もどる</button>
+  </div>
+
+<script>
+/******************* データセット *******************/
+const KANA = {
+  hira: {
+    seion: ['あ','い','う','え','お','か','き','く','け','こ','さ','し','す','せ','そ','た','ち','つ','て','と','な','に','ぬ','ね','の','は','ひ','ふ','へ','ほ','ま','み','む','め','も','や','ゆ','よ','ら','り','る','れ','ろ','わ','を','ん'],
+    dakuon: ['が','ぎ','ぐ','げ','ご','ざ','じ','ず','ぜ','ぞ','だ','ぢ','づ','で','ど','ば','び','ぶ','べ','ぼ'],
+    handakuon: ['ぱ','ぴ','ぷ','ぺ','ぽ'],
+    yoon: ['きゃ','きゅ','きょ','しゃ','しゅ','しょ','ちゃ','ちゅ','ちょ','にゃ','にゅ','にょ','ひゃ','ひゅ','ひょ','みゃ','みゅ','みょ','りゃ','りゅ','りょ','ぎゃ','ぎゅ','ぎょ','じゃ','じゅ','じょ','びゃ','びゅ','びょ','ぴゃ','ぴゅ','ぴょ']
+  },
+  kata: {
+    seion: ['ア','イ','ウ','エ','オ','カ','キ','ク','ケ','コ','サ','シ','ス','セ','ソ','タ','チ','ツ','テ','ト','ナ','ニ','ヌ','ネ','ノ','ハ','ヒ','フ','ヘ','ホ','マ','ミ','ム','メ','モ','ヤ','ユ','ヨ','ラ','リ','ル','レ','ロ','ワ','ヲ','ン'],
+    dakuon: ['ガ','ギ','グ','ゲ','ゴ','ザ','ジ','ズ','ゼ','ゾ','ダ','ヂ','ヅ','デ','ド','バ','ビ','ブ','ベ','ボ'],
+    handakuon: ['パ','ピ','プ','ペ','ポ'],
+    yoon: ['キャ','キュ','キョ','シャ','シュ','ショ','チャ','チュ','チョ','ニャ','ニュ','ニョ','ヒャ','ヒュ','ヒョ','ミャ','ミュ','ミョ','リャ','リュ','リョ','ギャ','ギュ','ギョ','ジャ','ジュ','ジョ','ビャ','ビュ','ビョ','ピャ','ピュ','ピョ']
+  }
+};
+function buildPool(script, set){ const d = KANA[script]; return (set==='all')? [...d.seion, ...d.dakuon, ...d.handakuon, ...d.yoon] : [...d[set]]; }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+/******************* 状態 *******************/
+let script = 'hira';
+let setKind = 'seion';
+let mode = 'choice'; // 'choice' | 'hand'
+let pool = [];
+let queue = []; // 重複なしの出題キュー
+let qIndex = -1;
+let current = '';
+let running = false;
+
+// 成績
+let correct = 0, wrong = 0, maybe = 0; const wrongMap = new Map();
+
+/******************* 要素参照 *******************/
+const scriptSel = document.getElementById('scriptSel');
+const setSel = document.getElementById('setSel');
+const modeSel = document.getElementById('modeSel');
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
+const promptEl = document.getElementById('prompt');
+const choiceArea = document.getElementById('choiceArea');
+const handArea = document.getElementById('handArea');
+const playBtn = document.getElementById('playBtn');
+const replayBtn = document.getElementById('replayBtn');
+const feedback = document.getElementById('feedback');
+const progress = document.getElementById('progress');
+const resultPanel = document.getElementById('resultPanel');
+const recordToggle = document.getElementById('recordToggle');
+const recordPanel = document.getElementById('recordPanel');
+const recordList = document.getElementById('recordList');
+const refreshRec = document.getElementById('refreshRec');
+const clearRec = document.getElementById('clearRec');
+const settingsDlg = document.getElementById('settings');
+const leniency = document.getElementById('leniency');
+const lenVal = document.getElementById('lenVal');
+const openSettings = document.getElementById('openSettings');
+const saveSettings = document.getElementById('saveSettings');
+
+// 手書き関係
+const canvas = document.getElementById('draw');
+const ctx = canvas.getContext('2d');
+const undoBtn = document.getElementById('undoBtn');
+const clearBtn = document.getElementById('clearBtn');
+const autoBtn = document.getElementById('autoBtn');
+const markGood = document.getElementById('markGood');
+const markMaybe = document.getElementById('markMaybe');
+const markBad = document.getElementById('markBad');
+
+/******************* ユーティリティ *******************/
+function speakKana(text){ try{ if(window.speechSynthesis){ speechSynthesis.cancel(); } const u=new SpeechSynthesisUtterance(text==='ヲ'?'を':text); u.lang='ja-JP'; speechSynthesis.speak(u);}catch(e){} }
+function showFeedback(mark){ feedback.textContent = mark; feedback.style.display='block'; setTimeout(()=>{ feedback.style.display='none'; }, 520); }
+function updateProgress(){ progress.textContent = running ? `もんだい：${qIndex+1}/${queue.length}` : ''; }
+
+/******************* Canvas 安全初期化（高DPI対応＋例外防止） *******************/
+function ensureCanvasReady(){
+  const cs = getComputedStyle(canvas);
+  const cssW = parseFloat(cs.width) || canvas.offsetWidth || 320;
+  const cssH = parseFloat(cs.height) || canvas.offsetHeight || 320;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const needW = Math.max(1, Math.floor(cssW * dpr));
+  const needH = Math.max(1, Math.floor(cssH * dpr));
+  if (canvas.width !== needW || canvas.height !== needH) {
+    canvas.width = needW; canvas.height = needH;
+    const c2d = canvas.getContext('2d');
+    if (c2d) c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+}
+function safeGetImageData(ctx, x, y, w, h){ try { return ctx.getImageData(x,y,w,h); } catch(err){ ensureCanvasReady(); try{ return ctx.getImageData(x,y,w,h);}catch(e2){ return null; } } }
+
+/******************* 手書き描画（Pointer/Touch/Mouse 全対応） *******************/
+let drawing=false, paths=[], currentPath=[];
+function redraw(){
+  ensureCanvasReady();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.globalAlpha=1; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#000'; ctx.lineWidth=14;
+  for(const p of paths){ if(!p.length) continue; ctx.beginPath(); ctx.moveTo(p[0].x,p[0].y); for(let i=1;i<p.length;i++) ctx.lineTo(p[i].x,p[i].y); ctx.stroke(); }
+  if(currentPath.length){ ctx.beginPath(); ctx.moveTo(currentPath[0].x,currentPath[0].y); for(let i=1;i<currentPath.length;i++) ctx.lineTo(currentPath[i].x,currentPath[i].y); ctx.stroke(); }
+}
+function pointFrom(e){ const r=canvas.getBoundingClientRect(); const cx=(e.clientX ?? (e.touches? e.touches[0].clientX:0)); const cy=(e.clientY ?? (e.touches? e.touches[0].clientY:0)); return {x:cx-r.left, y:cy-r.top}; }
+function startDraw(e){ if(e.cancelable) e.preventDefault(); ensureCanvasReady(); drawing=true; currentPath=[pointFrom(e)]; }
+function moveDraw(e){ if(!drawing) return; if(e.cancelable) e.preventDefault(); currentPath.push(pointFrom(e)); redraw(); }
+function endDraw(e){ if(!drawing) return; if(e.cancelable) e.preventDefault(); drawing=false; paths.push(currentPath); currentPath=[]; redraw(); }
+// Pointer（対応ブラウザ優先）
+canvas.addEventListener('pointerdown', e=>{ startDraw(e); canvas.setPointerCapture?.(e.pointerId); });
+canvas.addEventListener('pointermove', moveDraw);
+canvas.addEventListener('pointerup', endDraw);
+canvas.addEventListener('pointercancel', ()=>{ drawing=false; currentPath=[]; });
+// Fallback: Touch & Mouse
+canvas.addEventListener('touchstart', startDraw, {passive:false});
+canvas.addEventListener('touchmove', moveDraw, {passive:false});
+canvas.addEventListener('touchend', endDraw, {passive:false});
+canvas.addEventListener('mousedown', startDraw);
+window.addEventListener('mousemove', moveDraw);
+window.addEventListener('mouseup', endDraw);
+
+undoBtn.onclick = ()=>{ if(paths.length){ paths.pop(); redraw(); } };
+clearBtn.onclick = ()=>{ paths=[]; redraw(); };
+
+/******************* 判定（自動：ゆるめ） *******************/
+function thresholds(){ const v=parseInt(localStorage.getItem('kana_leniency')||leniency.value,10)||4; const table={1:[0.35,0.25],2:[0.26,0.18],3:[0.20,0.12],4:[0.15,0.09],5:[0.10,0.06]}; return table[v]||table[4]; }
+function autoJudge(){ let w=canvas.width,h=canvas.height; if(w<1||h<1){ ensureCanvasReady(); w=canvas.width; h=canvas.height; if(w<1||h<1) return {ok:false,ratioA:0,ratioB:0}; }
+  const drawnIm=safeGetImageData(ctx,0,0,w,h); if(!drawnIm) return {ok:false,ratioA:0,ratioB:0};
+  const data=drawnIm.data; let drawnCount=0; const m1=new Uint8Array(w*h); for(let i=0;i<w*h;i++){ const a=data[i*4+3]; if(a>20){ m1[i]=1; drawnCount++; } }
+  if(drawnCount<120) return {ok:false,ratioA:0,ratioB:0};
+  const off=document.createElement('canvas'); off.width=w; off.height=h; const o=off.getContext('2d'); o.fillStyle='#000'; const fBase=(current.length>=2)? Math.floor(h*0.55):Math.floor(h*0.68); o.font=`normal ${fBase}px "Yu Gothic", "Noto Sans JP", sans-serif`; o.textAlign='center'; o.textBaseline='middle'; o.fillText(current,w/2,h/2+4);
+  const glyphIm=safeGetImageData(o,0,0,w,h); if(!glyphIm) return {ok:false,ratioA:0,ratioB:0};
+  const g=glyphIm.data; let glyphCount=0; const m2=new Uint8Array(w*h); for(let i=0;i<w*h;i++){ const a=g[i*4+3]; const sum=g[i*4]+g[i*4+1]+g[i*4+2]; if(a>10 && sum<720){ m2[i]=1; glyphCount++; } }
+  if(glyphCount<200) return {ok:false,ratioA:0,ratioB:0};
+  let overlap=0; for(let i=0;i<w*h;i++){ if(m1[i]&&m2[i]) overlap++; }
+  const ratioA=overlap/drawnCount, ratioB=overlap/glyphCount; const [thA,thB]=thresholds(); return {ok:(ratioA>=thA && ratioB>=thB), ratioA, ratioB}; }
+
+function mark(kind){ if(!running) return; if(kind==='good'){ correct++; showFeedback('〇'); } else if(kind==='maybe'){ maybe++; showFeedback('△'); wrongMap.set(current,(wrongMap.get(current)||0)+1); } else { wrong++; showFeedback('×'); wrongMap.set(current,(wrongMap.get(current)||0)+1); } nextQuestion(); }
+
+// 自動採点（こたえ）
+autoBtn.onclick = ()=>{ const r=autoJudge(); if(r.ok){ mark('good'); } else { mark('bad'); } };
+
+// 先生☑（〇/△/×）
+markGood.onclick=()=>mark('good'); markMaybe.onclick=()=>mark('maybe'); markBad.onclick=()=>mark('bad');
+
+/******************* 5択（重複なしで進行） *******************/
+function renderChoice(){ choiceArea.innerHTML=''; const opts = new Set([current]); if(pool.length<=5){ pool.forEach(ch=>opts.add(ch)); } else { while(opts.size<5){ const pick = pool[Math.floor(Math.random()*pool.length)]; if(pick!==current) opts.add(pick); } }
+  const list = shuffle([...opts]).slice(0, Math.min(5, pool.length)); list.forEach(opt=>{ const b=document.createElement('button'); b.className='option'; b.textContent=opt; b.onclick=()=>{ if(opt===current){ correct++; showFeedback('〇'); nextQuestion(); } else { wrong++; showFeedback('×'); wrongMap.set(current,(wrongMap.get(current)||0)+1); } }; choiceArea.appendChild(b); }); }
+
+/******************* 進行制御（全問出題・順不同・重複なし） *******************/
+function nextQuestion(){
+  qIndex++;
+  updateProgress();
+  if(qIndex>=queue.length){ finish(); return; }
+  current = queue[qIndex];
+  speakKana(current);
+  feedback.style.display='none';
+  if(mode==='choice'){
+    choiceArea.style.display='flex';
+    handArea.style.display='none';
+    renderChoice();
+  } else {
+    choiceArea.style.display='none';
+    handArea.style.display='block';
+    paths=[];
+    requestAnimationFrame(()=>{ ensureCanvasReady(); redraw(); });
+  }
+  replayBtn.style.display = running ? 'inline-block':'none';
+}
+
+function start(){
+  script=scriptSel.value; setKind=setSel.value; mode=modeSel.value;
+  pool=buildPool(script,setKind);
+  queue = shuffle([...pool]);
+  qIndex=-1; running=true; correct=0; wrong=0; maybe=0; wrongMap.clear(); resultPanel.innerHTML='';
+  promptEl.textContent=(mode==='choice')? 'おとをきいて　えらんでね' : 'おとをきいて　かいてね';
+  nextQuestion();
+}
+function resetAll(){ running=false; choiceArea.innerHTML=''; handArea.style.display='none'; choiceArea.style.display='none'; progress.textContent=''; feedback.style.display='none'; resultPanel.innerHTML=''; stopSpeak(); }
+function stopSpeak(){ try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){} }
+
+/* 完了処理 */
+function finish(){
+  if(!running){ return; }
+  running=false; stopSpeak();
+  const rec = buildRecord();
+  saveRecord(rec);
+  const wrongLines = Array.from(wrongMap.entries()).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}：${v}回`).join('　');
+  resultPanel.innerHTML = `
+    <div style="margin-top:14px; font-size:1.1em;">
+      <div><strong>けっか</strong>　〇：${correct}　×：${wrong}　△：${maybe}</div>
+      <div style="margin-top:8px;"><strong>まちがえた文字</strong>：${wrongLines || 'なし'}</div>
+      <div style="margin-top:10px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <button class=\"nav-button\" onclick=\"start()\">↻ もういちど</button>
+      </div>
+    </div>`;
+  if(recordPanel.style.display==='block') { renderRecords(); }
+}
+
+/******************* 記録（ローカルストレージ） *******************/
+const REC_KEY='kana_test_records_v1';
+function buildRecord(){ const now=new Date(); const ja=now.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}); const wrongs=Array.from(wrongMap.entries()).map(([ch,n])=>({ch,n})).sort((a,b)=>b.n-a.n); return {date:ja, script,setKind,mode,total:queue.length,correct,wrong,maybe,wrongs}; }
+function saveRecord(rec){ try{ const arr=JSON.parse(localStorage.getItem(REC_KEY)||'[]'); arr.push(rec); if(arr.length>200) arr.shift(); localStorage.setItem(REC_KEY, JSON.stringify(arr)); }catch(e){} }
+function loadRecords(){ try{ return JSON.parse(localStorage.getItem(REC_KEY)||'[]'); }catch(e){ return []; } }
+function renderRecords(){ const arr=loadRecords().slice().reverse(); recordList.innerHTML=''; if(!arr.length){ recordList.textContent='（まだ きろく が ありません）'; return; } for(const r of arr){ const div=document.createElement('div'); div.className='recItem'; const d=document.createElement('details'); d.innerHTML=`<summary>${r.date}｜${labelScript(r.script)}｜${labelSet(r.setKind)}｜${labelMode(r.mode)}｜〇${r.correct} ×${r.wrong} △${r.maybe}</summary>`; const w=(r.wrongs&&r.wrongs.length)? r.wrongs.map(x=>`${x.ch}:${x.n}`).join('　'):'なし'; const inner=document.createElement('div'); inner.style.margin='8px 0 0'; inner.textContent=`まちがえ：${w}`; d.appendChild(inner); div.appendChild(d); recordList.appendChild(div); } }
+function labelScript(s){ return s==='hira'?'ひらがな':'カタカナ'; }
+function labelSet(s){ return {seion:'清音',dakuon:'濁音',handakuon:'半濁音',yoon:'拗音',all:'ぜんぶ'}[s]||s; }
+function labelMode(m){ return m==='choice'?'5択':'手書き'; }
+
+function clearAllRecords(silent){
+  try{
+    // 現行キーと旧キーを両方クリア（環境差・旧版混在対策）
+    const keys=[REC_KEY,'kana_test_records','kana_test_records_v0'];
+    for(const k of keys){ localStorage.removeItem(k); }
+    localStorage.setItem(REC_KEY, '[]');
+  }catch(e){}
+  if(!silent) alert('記録を消去しました');
+  // DOM を即時空表示にしてから再描画（見た目残り対策）
+  recordList.innerHTML='（まだ きろく が ありません）';
+  // 次のタスクで再確認
+  setTimeout(renderRecords, 0);
+}
+
+recordToggle.onclick=()=>{ recordPanel.style.display=(recordPanel.style.display==='block')?'none':'block'; if(recordPanel.style.display==='block') renderRecords(); };
+refreshRec.onclick=renderRecords;
+clearRec.onclick=()=>{ if(confirm('ぜんぶ消しますか？')){ clearAllRecords(false); } };
+
+/******************* 設定（やさしさ） *******************/
+openSettings.onclick=()=>{ const v=parseInt(localStorage.getItem('kana_leniency')||'4',10)||4; leniency.value=String(v); lenVal.textContent=String(v); settingsDlg.showModal(); };
+leniency.addEventListener('input',()=>{ lenVal.textContent=leniency.value; });
+saveSettings.onclick=(e)=>{ e.preventDefault(); localStorage.setItem('kana_leniency', String(leniency.value)); settingsDlg.close(); };
+
+/******************* 開始/終了 *******************/
+startBtn.onclick=start; resetBtn.onclick=resetAll; playBtn.onclick=()=>{ if(current) speakKana(current); }; replayBtn.onclick=()=>{ if(current) speakKana(current); };
+
+/******************* 初期化 *******************/
+ensureCanvasReady(); redraw();
+
+/******************* 簡易テスト（?dev=1） *******************/
+(function dev(){ const p=new URLSearchParams(location.search); if(p.get('dev')!=='1') return; const panel=document.getElementById('devPanel'); panel.style.display='block'; const logs=[]; const log=(ok,msg)=>logs.push((ok?'✅ ':'❌ ')+msg);
+  try{ const r1 = (function(){ ensureCanvasReady(); const im = safeGetImageData(ctx,0,0,canvas.width,canvas.height); return (im===null || (im.width===canvas.width)); })(); log(r1,'T1: getImageData で例外にならない'); }catch(e){ log(false,'T1: 例外 '+e); }
+  try{ // 記録の追加と消去
+    const before=loadRecords().length; saveRecord({date:'TEST',script:'hira',setKind:'seion',mode:'choice',total:1,correct:1,wrong:0,maybe:0,wrongs:[]}); const mid=loadRecords().length; clearAllRecords(true); const after=loadRecords().length; log(mid===before+1 && after===0, 'T2: 記録の保存と消去');
+  }catch(e){ log(false,'T2: 例外 '+e); }
+  try{ // キューの重複なし
+    pool=buildPool('hira','handakuon'); queue=shuffle([...pool]); const set=new Set(queue); log(queue.length===pool.length && set.size===queue.length, 'T3: 全問出題・重複なし');
+  }catch(e){ log(false,'T3: 例外 '+e); }
+  try{ // 完了処理が呼べる & 記録が増える
+    running=true; script='hira'; setKind='seion'; mode='choice'; queue=['あ']; qIndex=1; current='あ'; correct=1; wrong=0; maybe=0; wrongMap.clear();
+    const before2=loadRecords().length; finish(); const after2=loadRecords().length;
+    log(after2===before2+1, 'T4: finish() が記録を保存し結果を表示');
+  }catch(e){ log(false,'T4: 例外 '+e); }
+  panel.innerHTML='<b>DEV テスト</b><br>'+logs.map(l=>'<div>'+l+'</div>').join(''); })();
+</script>
+</body>
+</html>
