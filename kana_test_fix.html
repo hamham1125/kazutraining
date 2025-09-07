@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ひらがな・カタカナ テスト</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* ========= 共通（アルファベット練習と同系統の見た目） ========= */
+    body { background:#fff7dc; font-family:'Rounded Mplus 1c', system-ui, -apple-system, Segoe UI, sans-serif; text-align:center; margin:0; padding:54px 10px 30px; }
+    h1 { font-size:2em; margin:0 0 14px; }
+
+    /* ボタン類（クリック押し込み表現） */
+    .audio-button, .nav-button, .option { cursor:pointer; user-select:none; transition: transform .08s ease, box-shadow .08s ease; }
+    .audio-button { font-size:1.05em; padding:8px 14px; border-radius:12px; border:none; background:#ffca28; box-shadow:0 4px 0 #f0b400; }
+    .nav-button { font-size:1em; padding:10px 16px; border:none; border-radius:10px; background:#ccc; box-shadow:0 3px 0 #bdbdbd; }
+    .option { min-width:120px; min-height:72px; font-size:2rem; padding:10px 16px; border:none; border-radius:16px; background:#fff; box-shadow:0 4px 0 #bdbdbd; }
+    .audio-button:active, .nav-button:active, .option:active { transform: translateY(2px) scale(0.98); box-shadow:0 2px 0 rgba(0,0,0,.2); }
+
+    /* コントロールバー（1行。狭い画面は折返し） */
+    .controls { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center; background:rgba(255,255,255,.88); padding:10px 12px; border-radius:14px; box-shadow:0 2px 0 rgba(0,0,0,.1); }
+    .controls select { font-size:1rem; padding:8px 12px; border-radius:10px; background:#fff; border:1px solid #ddd; }
+    .spacer { width:8px; height:1px; }
+
+    .questionWrap { margin-top:18px; }
+    .bigNotice { font-size:1.1em; color:#333; margin:6px 0 12px; }
+
+    /* 5択エリア */
+    .options { display:flex; justify-content:center; flex-wrap:wrap; gap:16px; margin-top:12px; }
+
+    /* 手書きエリア */
+    .drawWrap { display:none; margin:10px auto 0; max-width:360px; }
+    .canvasBox { position:relative; margin:0 auto; width:320px; height:320px; background:#fff; border-radius:12px; box-shadow:inset 0 0 0 2px #333; }
+    /* Ensure canvas appears above the grid overlay by setting z-index */
+    canvas {
+      position: relative;
+      z-index: 1;
+      width: 320px;
+      height: 320px;
+      touch-action: none;
+      display: block;
+      background: #fff;
+    }
+    /* 4分割ガイド */
+    /* Draw the guideline grid behind the canvas. The z-index ensures it does not cover drawn lines. */
+    .grid::before { content:""; position:absolute; inset:0; pointer-events:none; z-index:0; background:
+      linear-gradient(#ddd 1px, transparent 1px) 0 50%/100% 1px,
+      linear-gradient(90deg, #ddd 1px, transparent 1px) 50% 0/1px 100%; }
+
+    .drawTools { display:flex; justify-content:center; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center; }
+    .label { font-size:.95em; opacity:.85; }
+
+    /* フィードバック（〇×） */
+    #feedback { font-size:4.6em; color:#e60000; line-height:1; display:none; margin:10px 0; text-shadow:0 2px 4px rgba(0,0,0,.15); }
+
+    /* 結果 */
+    #resultPanel { margin-top:16px; font-size:1.1em; }
+
+    /* 記録リーダ（左上固定） */
+    #recordToggle { position:fixed; top:10px; left:10px; background:#ffd54f; padding:8px 12px; border-radius:10px; font-size:1em; z-index:1000; border:none; box-shadow:0 3px 0 #f0b400; cursor:pointer; }
+    #recordPanel { position:fixed; top:52px; left:10px; width:min(92vw, 360px); max-height:80vh; overflow:auto; background:#fff; border:2px solid #e0c36a; border-radius:12px; padding:12px; text-align:left; display:none; z-index:1000; }
+    #recordPanel h3 { margin:6px 0 8px; }
+    .recItem { border:1px solid #eee; padding:8px; border-radius:8px; margin-bottom:8px; background:#fafafa; }
+    .recItem summary { cursor:pointer; }
+
+    /* 設定ダイアログ */
+    dialog#settings { border:none; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:16px; }
+    #settings .row { display:flex; align-items:center; gap:10px; }
+    #settings input[type=range] { width:200px; }
+
+    .footer { margin-top:22px; }
+  </style>
+</head>
+<body>
+  <!-- 記録トグル -->
+  <button id="recordToggle">📊 きろく</button>
+  <div id="recordPanel">
+    <h3>きろく（ローカル保存）</h3>
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+      <button class="nav-button" id="refreshRec">⟳ 更新</button>
+      <button class="nav-button" id="clearRec" style="background:#ffb3b3">🗑 ぜんぶ消す</button>
+    </div>
+    <div id="recordList"></div>
+  </div>
+
+  <!-- 採点待ちパネル（記録とは別に表示） -->
+  <div id="pendingPanel" style="position:fixed; top:52px; right:10px; width:min(92vw, 360px); max-height:80vh; overflow:auto; background:#fff; border:2px solid #e0c36a; border-radius:12px; padding:12px; text-align:left; display:none; z-index:1000;">
+    <h3 style="margin:6px 0 8px;">採点待ち</h3>
+    <div id="pendingList"></div>
+  </div>
+
+  <h1>ひらがな・カタカナ テスト</h1>
+  <div class="controls">
+    <button id="startBtn" class="nav-button">▶ スタート</button>
+    <button id="resetBtn" class="nav-button">↺ リセット</button>
+    <div class="spacer"></div>
+    <label class="label">文字種：</label>
+    <select id="scriptSel">
+      <option value="hira">ひらがな</option>
+      <option value="kata">カタカナ</option>
+    </select>
+    <label class="label">セット：</label>
+    <select id="setSel">
+      <option value="seion">清音</option>
+      <option value="dakuon">濁音</option>
+      <option value="handakuon">半濁音</option>
+      <option value="yoon">拗音</option>
+      <option value="all">ぜんぶ</option>
+    </select>
+    <label class="label">モード：</label>
+    <select id="modeSel">
+      <option value="choice">5択</option>
+      <option value="hand">手書き</option>
+    </select>
+    <label class="label">採点：</label>
+    <select id="evalSel">
+      <option value="auto">AI判定</option>
+      <option value="teacher">先生採点</option>
+    </select>
+    <button id="openSettings" class="nav-button" title="判定のやさしさ">⚙ 設定</button>
+    <!-- 新しい採点待ちボタン -->
+    <button id="pendingToggle" class="nav-button" title="採点待ちの一覧">📝 採点待ち</button>
+  </div>
+
+  <div class="questionWrap">
+    <div class="bigNotice" id="prompt">おとをきいて　えらんでね / かいてね</div>
+    <div style="margin-bottom:10px; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+      <button class="audio-button" id="playBtn">▶ おとをきく</button>
+      <button class="audio-button" id="replayBtn" style="display:none">▶ もういっかい</button>
+    </div>
+
+    <!-- 5択 -->
+    <div id="choiceArea" class="options"></div>
+
+    <!-- 手書き -->
+    <div id="handArea" class="drawWrap">
+      <div class="canvasBox grid">
+        <canvas id="draw"></canvas>
+      </div>
+      <div class="drawTools">
+        <button class="nav-button" id="undoBtn">↩ 1つ戻す</button>
+        <button class="nav-button" id="clearBtn">🧽 ぜんぶ消す</button>
+        <!-- In AI mode, autoBtn will perform auto judgement; in teacher mode, submitBtn will submit the drawing for teacher grading -->
+        <button class="audio-button" id="autoBtn">こたえ</button>
+        <button class="nav-button" id="submitBtn">ていしゅつ</button>
+      </div>
+    </div>
+
+    <div id="feedback">〇</div>
+    <div id="progress" class="bigNotice"></div>
+    <div id="resultPanel"></div>
+  </div>
+
+  <!-- 設定ダイアログ -->
+  <dialog id="settings">
+    <form method="dialog">
+      <h3 style="margin-top:0">⚙ 設定</h3>
+      <div class="row" style="margin:8px 0 12px;">
+        <label style="min-width:6em">やさしさ</label>
+        <input type="range" id="leniency" min="1" max="5" step="1" value="4" />
+        <span id="lenVal">4</span>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end">
+        <button class="nav-button" value="cancel">とじる</button>
+        <button class="nav-button" id="saveSettings" value="default">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+  // Data
+  const KANA = {
+    hira: {
+      seion: ['あ','い','う','え','お','か','き','く','け','こ','さ','し','す','せ','そ','た','ち','つ','て','と','な','に','ぬ','ね','の','は','ひ','ふ','へ','ほ','ま','み','む','め','も','や','ゆ','よ','ら','り','る','れ','ろ','わ','を','ん'],
+      dakuon: ['が','ぎ','ぐ','げ','ご','ざ','じ','ず','ぜ','ぞ','だ','ぢ','づ','で','ど','ば','び','ぶ','べ','ぼ'],
+      handakuon: ['ぱ','ぴ','ぷ','ぺ','ぽ'],
+      yoon: ['きゃ','きゅ','きょ','しゃ','しゅ','しょ','ちゃ','ちゅ','ちょ','にゃ','にゅ','にょ','ひゃ','ひゅ','ひょ','みゃ','みゅ','みょ','りゃ','りゅ','りょ','ぎゃ','ぎゅ','ぎょ','じゃ','じゅ','じょ','びゃ','びゅ','びょ','ぴゃ','ぴゅ','ぴょ']
+    },
+    kata: {
+      seion: ['ア','イ','ウ','エ','オ','カ','キ','ク','ケ','コ','サ','シ','ス','セ','ソ','タ','チ','ツ','テ','ト','ナ','ニ','ヌ','ネ','ノ','ハ','ヒ','フ','ヘ','ホ','マ','ミ','ム','メ','モ','ヤ','ユ','ヨ','ラ','リ','ル','レ','ロ','ワ','ヲ','ン'],
+      dakuon: ['ガ','ギ','グ','ゲ','ゴ','ザ','ジ','ズ','ゼ','ゾ','ダ','ヂ','ヅ','デ','ド','バ','ビ','ブ','ベ','ボ'],
+      handakuon: ['パ','ピ','プ','ペ','ポ'],
+      yoon: ['キャ','キュ','キョ','シャ','シュ','ショ','チャ','チュ','チョ','ニャ','ニュ','ニョ','ヒャ','ヒュ','ヒョ','ミャ','ミュ','ミョ','リャ','リュ','リョ','ギャ','ギュ','ギョ','ジャ','ジュ','ジョ','ビャ','ビュ','ビョ','ピャ','ピュ','ピョ']
+    }
+  };
+  function buildPool(s, set){ const d = KANA[s]; return (set==='all') ? [...d.seion, ...d.dakuon, ...d.handakuon, ...d.yoon] : [...d[set]]; }
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  // State
+  let script = 'hira';
+  let setKind = 'seion';
+  let mode = 'choice';
+  let evalMethod = 'auto';
+  let pool = [];
+  let queue = [];
+  let qIndex = -1;
+  let current = '';
+  let running = false;
+  let correct = 0, wrong = 0, maybe = 0;
+  const wrongMap = new Map();
+
+  // Submission storage (for teacher grading)
+  const SUB_KEY = 'kana_test_submissions_v1';
+
+  // Aggregated session storage for teacher grading
+  const AGG_KEY = 'kana_test_aggregators_v1';
+
+  // Session context for current test (teacher mode)
+  let currentSessionId = null;
+  let currentTotal = 0;
+
+  // Load aggregators map from storage
+  function loadAggregators() {
+    try {
+      return JSON.parse(localStorage.getItem(AGG_KEY) || '{}');
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // Save aggregators map to storage
+  function saveAggregators(obj) {
+    try {
+      localStorage.setItem(AGG_KEY, JSON.stringify(obj));
+    } catch (e) {}
+  }
+
+  // Update or create aggregator entry for a graded submission
+  function updateAggregatorForSubmission(sub, grade) {
+    const aggs = loadAggregators();
+    let agg = aggs[sub.sessionId];
+    if (!agg) {
+      // Create new aggregator for this session
+      agg = {
+        date: sub.date,
+        script: sub.script,
+        setKind: sub.setKind,
+        mode: 'hand',
+        total: sub.total || 1,
+        gradedCount: 0,
+        correct: 0,
+        wrong: 0,
+        maybe: 0,
+        wrongs: {}
+      };
+      aggs[sub.sessionId] = agg;
+    }
+    // Update counts based on grade
+    agg.gradedCount++;
+    if (grade === 'good') {
+      agg.correct++;
+    } else if (grade === 'bad') {
+      agg.wrong++;
+      agg.wrongs[sub.char] = (agg.wrongs[sub.char] || 0) + 1;
+    } else if (grade === 'maybe') {
+      agg.maybe++;
+      agg.wrongs[sub.char] = (agg.wrongs[sub.char] || 0) + 1;
+    }
+    saveAggregators(aggs);
+    // Check if the session is fully graded
+    if (agg.gradedCount >= agg.total) {
+      // Build aggregated record
+      const wrongArr = Object.entries(agg.wrongs).map(([ch, n]) => ({ ch, n })).sort((a, b) => b.n - a.n);
+      const rec = {
+        date: agg.date,
+        script: agg.script,
+        setKind: agg.setKind,
+        mode: 'hand',
+        total: agg.total,
+        correct: agg.correct,
+        wrong: agg.wrong,
+        maybe: agg.maybe,
+        wrongs: wrongArr
+      };
+      // Save aggregated record
+      saveRecord(rec);
+      // Remove aggregator entry
+      delete aggs[sub.sessionId];
+      saveAggregators(aggs);
+    }
+  }
+
+  function loadSubmissions() {
+    try {
+      return JSON.parse(localStorage.getItem(SUB_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveSubmissions(arr) {
+    try {
+      localStorage.setItem(SUB_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+
+  function addSubmission(sub) {
+    const arr = loadSubmissions();
+    arr.push(sub);
+    saveSubmissions(arr);
+  }
+
+  // Grade a submission and persist as a record
+  function gradeSubmission(sub, grade) {
+    // Remove from submissions list
+    let arr = loadSubmissions();
+    arr = arr.filter(s => s.id !== sub.id);
+    saveSubmissions(arr);
+    // Update aggregator for this submission
+    updateAggregatorForSubmission(sub, grade);
+    // Refresh displays
+    renderRecords();
+    renderPending();
+  }
+  // Elements
+  const scriptSel = document.getElementById('scriptSel');
+  const setSel = document.getElementById('setSel');
+  const modeSel = document.getElementById('modeSel');
+  const evalSel = document.getElementById('evalSel');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const promptEl = document.getElementById('prompt');
+  const choiceArea = document.getElementById('choiceArea');
+  const handArea = document.getElementById('handArea');
+  const submitBtn = document.getElementById('submitBtn');
+  const playBtn = document.getElementById('playBtn');
+  const replayBtn = document.getElementById('replayBtn');
+  const feedbackEl = document.getElementById('feedback');
+  const progressEl = document.getElementById('progress');
+  const resultPanel = document.getElementById('resultPanel');
+  // Canvas
+  const canvas = document.getElementById('draw');
+  const ctx = canvas.getContext('2d');
+  const undoBtn = document.getElementById('undoBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const autoBtn = document.getElementById('autoBtn');
+  // Manual mark buttons have been removed; placeholders kept for compatibility (null)
+  const markGood = null;
+  const markMaybe = null;
+  const markBad = null;
+  const leniencyRange = document.getElementById('leniency');
+  const lenVal = document.getElementById('lenVal');
+  // Add explicit references for the settings dialog and its buttons to avoid reliance on global variables.
+  const settingsDlg = document.getElementById('settings');
+  const openSettingsBtn = document.getElementById('openSettings');
+  const saveSettingsBtn = document.getElementById('saveSettings');
+
+  // Elements related to grading pending list
+  const pendingToggle = document.getElementById('pendingToggle');
+  const pendingPanel = document.getElementById('pendingPanel');
+  const pendingList = document.getElementById('pendingList');
+  // Utils
+  function speakKana(text){ try{ if(window.speechSynthesis){ speechSynthesis.cancel(); } const u = new SpeechSynthesisUtterance(text==='ヲ'?'を':text); u.lang='ja-JP'; speechSynthesis.speak(u);}catch(e){} }
+  function showFeedback(mark){ feedbackEl.textContent=mark; feedbackEl.style.display='block'; setTimeout(()=>{ feedbackEl.style.display='none'; },520); }
+  function updateProgress(){ progressEl.textContent = running? `もんだい：${qIndex+1}/${queue.length}` : ''; }
+  // Canvas functions
+  function ensureCanvasReady(){ const cs = getComputedStyle(canvas); const cssW = Math.max(1, parseFloat(cs.width) || canvas.offsetWidth || 320); const cssH = Math.max(1, parseFloat(cs.height) || canvas.offsetHeight || 320); const needW=Math.floor(cssW); const needH=Math.floor(cssH); if(canvas.width!==needW || canvas.height!==needH){ canvas.width=needW; canvas.height=needH; } }
+  let drawing = false, paths = [], currentPath = [];
+  function redraw(){ ensureCanvasReady(); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.globalAlpha=1; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#000'; ctx.lineWidth=14; function drawPath(p){ if(!p.length) return; ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y); for(let i=1;i<p.length;i++){ ctx.lineTo(p[i].x, p[i].y); } ctx.stroke(); }
+    for(const p of paths) drawPath(p);
+    drawPath(currentPath);
+  }
+  function cssPoint(e){ const r=canvas.getBoundingClientRect(); const cx=(e.clientX ?? (e.touches? e.touches[0].clientX:0)); const cy=(e.clientY ?? (e.touches? e.touches[0].clientY:0)); return { x: cx - r.left, y: cy - r.top }; }
+  function startDraw(e){ if(e.cancelable) e.preventDefault(); ensureCanvasReady(); drawing=true; currentPath=[cssPoint(e)]; }
+  function moveDraw(e){ if(!drawing) return; if(e.cancelable) e.preventDefault(); currentPath.push(cssPoint(e)); redraw(); }
+  function endDraw(e){ if(!drawing) return; if(e.cancelable) e.preventDefault(); drawing=false; paths.push(currentPath); currentPath=[]; redraw(); }
+  // Pointer and fallback
+  canvas.addEventListener('pointerdown', e=>{ startDraw(e); canvas.setPointerCapture?.(e.pointerId); });
+  canvas.addEventListener('pointermove', moveDraw);
+  canvas.addEventListener('pointerup', endDraw);
+  canvas.addEventListener('pointercancel', () => { drawing=false; currentPath=[]; });
+  canvas.addEventListener('touchstart', startDraw, {passive:false});
+  canvas.addEventListener('touchmove', moveDraw, {passive:false});
+  canvas.addEventListener('touchend', endDraw, {passive:false});
+  canvas.addEventListener('mousedown', startDraw);
+  window.addEventListener('mousemove', moveDraw);
+  window.addEventListener('mouseup', endDraw);
+  undoBtn.onclick=()=>{ if(paths.length){ paths.pop(); redraw(); } };
+  clearBtn.onclick=()=>{ paths=[]; redraw(); };
+  // Automatic judgement thresholds
+  function thresholds(){ const v=parseInt(localStorage.getItem('kana_leniency')||leniencyRange.value,10)||4; const table={1:[0.35,0.25],2:[0.26,0.18],3:[0.20,0.12],4:[0.15,0.09],5:[0.10,0.06]}; return table[v]||table[4]; }
+  function safeGetImageData(c,x,y,w,h){ try{ return c.getImageData(x,y,w,h);}catch(err){ ensureCanvasReady(); try{ return c.getImageData(x,y,w,h);}catch(e2){ return null; } } }
+  function autoJudge(){ let w=canvas.width,h=canvas.height; if(w<1||h<1){ ensureCanvasReady(); w=canvas.width; h=canvas.height; if(w<1||h<1) return {ok:false, ratioA:0, ratioB:0}; } const drawnIm = safeGetImageData(ctx,0,0,w,h); if(!drawnIm) return {ok:false, ratioA:0, ratioB:0}; const data=drawnIm.data; let drawnCount=0; const m1=new Uint8Array(w*h); for(let i=0;i<w*h;i++){ const a=data[i*4+3]; if(a>20){ m1[i]=1; drawnCount++; } } if(drawnCount<120) return {ok:false, ratioA:0, ratioB:0}; const off=document.createElement('canvas'); off.width=w; off.height=h; const o=off.getContext('2d'); o.fillStyle='#000'; const fBase=(current.length>=2)? Math.floor(h*0.55) : Math.floor(h*0.68); o.font=`normal ${fBase}px \"Yu Gothic\", \"Noto Sans JP\", sans-serif`; o.textAlign='center'; o.textBaseline='middle'; o.fillText(current,w/2,h/2+4); const glyphIm = safeGetImageData(o,0,0,w,h); if(!glyphIm) return {ok:false, ratioA:0, ratioB:0}; const g=glyphIm.data; let glyphCount=0; const m2=new Uint8Array(w*h); for(let i=0;i<w*h;i++){ const a=g[i*4+3]; const sum=g[i*4]+g[i*4+1]+g[i*4+2]; if(a>10 && sum<720){ m2[i]=1; glyphCount++; } } if(glyphCount<200) return {ok:false, ratioA:0, ratioB:0}; let overlap=0; for(let i=0;i<w*h;i++){ if(m1[i] && m2[i]) overlap++; } const ratioA=overlap/drawnCount; const ratioB=overlap/glyphCount; const [thA, thB] = thresholds(); return { ok:(ratioA>=thA && ratioB>=thB), ratioA, ratioB };
+  }
+  function mark(kind){ if(!running) return; if(kind==='good'){ correct++; showFeedback('〇'); } else if(kind==='maybe'){ maybe++; showFeedback('△'); wrongMap.set(current, (wrongMap.get(current)||0)+1); } else { wrong++; showFeedback('×'); wrongMap.set(current, (wrongMap.get(current)||0)+1); } nextQuestion(); }
+  // Auto judgement button
+  autoBtn.onclick=()=>{
+    if(!running || evalMethod !== 'auto') return;
+    const r = autoJudge();
+    if(r.ok) mark('good');
+    else mark('bad');
+  };
+  // manual mark buttons no longer exist
+  // 5-choice rendering
+  function renderChoice(){ choiceArea.innerHTML=''; const opts = new Set([current]); if(pool.length<=5){ pool.forEach(ch=>opts.add(ch)); } else { while(opts.size<5){ const pick = pool[Math.floor(Math.random()*pool.length)]; if(pick!==current) opts.add(pick); } } const list = shuffle([...opts]).slice(0, Math.min(5, pool.length)); list.forEach(opt=>{ const b=document.createElement('button'); b.className='option'; b.textContent=opt; b.onclick=()=>{ if(opt===current){ correct++; showFeedback('〇'); nextQuestion(); } else { wrong++; showFeedback('×'); wrongMap.set(current,(wrongMap.get(current)||0)+1); } }; choiceArea.appendChild(b); }); }
+  // Quiz control
+  function nextQuestion(){
+    qIndex++;
+    updateProgress();
+    if(qIndex >= queue.length){
+      finish();
+      return;
+    }
+    current = queue[qIndex];
+    speakKana(current);
+    feedbackEl.style.display = 'none';
+    if(mode === 'choice'){
+      // show multiple choice buttons
+      choiceArea.style.display = 'flex';
+      handArea.style.display = 'none';
+      renderChoice();
+    } else {
+      // hand writing mode
+      choiceArea.style.display = 'none';
+      handArea.style.display = 'block';
+      // reset drawn paths
+      paths = [];
+      // toggle buttons based on evaluation method
+      if(evalMethod === 'auto'){
+        autoBtn.style.display = 'inline-block';
+        submitBtn.style.display = 'none';
+      } else {
+        autoBtn.style.display = 'none';
+        submitBtn.style.display = 'inline-block';
+      }
+      requestAnimationFrame(() => {
+        ensureCanvasReady();
+        redraw();
+      });
+    }
+    replayBtn.style.display = running ? 'inline-block' : 'none';
+  }
+  function start(){
+    script = scriptSel.value;
+    setKind = setSel.value;
+    mode = modeSel.value;
+    evalMethod = evalSel ? evalSel.value : 'auto';
+    pool = buildPool(script, setKind);
+    queue = shuffle([...pool]);
+    qIndex = -1;
+    running = true;
+    correct = 0;
+    wrong = 0;
+    maybe = 0;
+    wrongMap.clear();
+    resultPanel.innerHTML = '';
+    // Assign a new session ID and total for teacher hand-writing tests
+    if (mode === 'hand' && evalMethod === 'teacher') {
+      currentSessionId = Date.now().toString() + Math.random().toString(36).slice(2);
+      currentTotal = pool.length;
+    } else {
+      currentSessionId = null;
+      currentTotal = 0;
+    }
+    promptEl.textContent = (mode === 'choice') ? 'おとをきいて　えらんでね' : 'おとをきいて　かいてね';
+    nextQuestion();
+  }
+  function resetAll(){ running=false; choiceArea.innerHTML=''; handArea.style.display='none'; choiceArea.style.display='none'; progressEl.textContent=''; feedbackEl.style.display='none'; resultPanel.innerHTML=''; try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){} }
+  function finish(){
+    if(!running){ return; }
+    running = false;
+    try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){}
+    // Build result string for UI
+    const wrongLines = Array.from(wrongMap.entries()).sort((a,b) => b[1] - a[1]).map(([k,v]) => `${k}：${v}回`).join('　');
+    resultPanel.innerHTML = `<div style="margin-top:14px; font-size:1.1em;"><div><strong>けっか</strong>　〇：${correct}　×：${wrong}　△：${maybe}</div><div style="margin-top:8px;"><strong>まちがえた文字</strong>：${wrongLines || 'なし'}</div><div style="margin-top:10px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;"><button class=\"nav-button\" onclick=\"start()\">↻ もういちど</button></div></div>`;
+    // In teacher mode for hand writing, do not auto-save record. Wait for manual grading.
+    if(mode === 'hand' && evalMethod === 'teacher'){
+      // do nothing (records will be saved after grading)
+    } else {
+      const rec = buildRecord();
+      saveRecord(rec);
+    }
+    if(recordPanel.style.display === 'block'){
+      renderRecords();
+    }
+  }
+  // Records
+  const REC_KEY='kana_test_records_v1';
+  function buildRecord(){ const now=new Date(); const ja=now.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}); const wrongs=Array.from(wrongMap.entries()).map(([ch,n])=>({ch,n})).sort((a,b)=>b.n-a.n); return { date:ja, script,setKind,mode,total:queue.length,correct,wrong,maybe,wrongs }; }
+  function saveRecord(rec){ try{ const arr=JSON.parse(localStorage.getItem(REC_KEY)||'[]'); arr.push(rec); if(arr.length>200) arr.shift(); localStorage.setItem(REC_KEY, JSON.stringify(arr)); }catch(e){} }
+  function loadRecords(){ try{ return JSON.parse(localStorage.getItem(REC_KEY)||'[]'); }catch(e){ return []; } }
+  function renderRecords(){
+    // Clear current list
+    recordList.innerHTML = '';
+    // Only show past test records (aggregated)
+    const arr = loadRecords().slice().reverse();
+    if (!arr.length) {
+      const p = document.createElement('div');
+      p.textContent = '（まだ きろく が ありません）';
+      recordList.appendChild(p);
+      return;
+    }
+    for (const r of arr) {
+      const div = document.createElement('div');
+      div.className = 'recItem';
+      const d = document.createElement('details');
+      d.innerHTML = `<summary>${r.date}｜${labelScript(r.script)}｜${labelSet(r.setKind)}｜${labelMode(r.mode)}｜〇${r.correct} ×${r.wrong} △${r.maybe}</summary>`;
+      const w = (r.wrongs && r.wrongs.length) ? r.wrongs.map(x => `${x.ch}:${x.n}`).join('　') : 'なし';
+      const inner = document.createElement('div');
+      inner.style.margin = '8px 0 0';
+      inner.textContent = `まちがえ：${w}`;
+      d.appendChild(inner);
+      div.appendChild(d);
+      recordList.appendChild(div);
+    }
+  }
+
+  // Render the list of pending submissions for teacher grading
+  function renderPending() {
+    if (!pendingList) return;
+    pendingList.innerHTML = '';
+    const pending = loadSubmissions();
+    if (!pending || !pending.length) {
+      const p = document.createElement('div');
+      p.textContent = '（採点待ちはありません）';
+      pendingList.appendChild(p);
+      return;
+    }
+    pending.forEach(sub => {
+      const div = document.createElement('div');
+      div.className = 'recItem';
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.gap = '8px';
+      // thumbnail
+      const img = document.createElement('img');
+      img.src = sub.image;
+      img.style.width = '60px';
+      img.style.height = '60px';
+      img.style.objectFit = 'contain';
+      row.appendChild(img);
+      // info text
+      const info = document.createElement('div');
+      info.style.flex = '1';
+      info.textContent = `${sub.date}｜${labelScript(sub.script)}｜${labelSet(sub.setKind)}｜文字：${sub.char}`;
+      row.appendChild(info);
+      // grading buttons
+      const btnGood = document.createElement('button');
+      btnGood.className = 'nav-button';
+      btnGood.textContent = '〇';
+      btnGood.onclick = () => { gradeSubmission(sub, 'good'); };
+      const btnBad = document.createElement('button');
+      btnBad.className = 'nav-button';
+      btnBad.textContent = '×';
+      btnBad.onclick = () => { gradeSubmission(sub, 'bad'); };
+      const btnBox = document.createElement('div');
+      btnBox.style.display = 'flex';
+      btnBox.style.gap = '4px';
+      btnBox.appendChild(btnGood);
+      btnBox.appendChild(btnBad);
+      row.appendChild(btnBox);
+      div.appendChild(row);
+      pendingList.appendChild(div);
+    });
+  }
+  function labelScript(s){ return s==='hira'?'ひらがな':'カタカナ'; }
+  function labelSet(s){ return {seion:'清音',dakuon:'濁音',handakuon:'半濁音',yoon:'拗音',all:'ぜんぶ'}[s]||s; }
+  function labelMode(m){ return m==='choice'?'5択':'手書き'; }
+  function clearAllRecords(silent){
+    try {
+      // Remove records, submissions, and aggregator keys
+      const keys = [REC_KEY, 'kana_test_records', 'kana_test_records_v0', SUB_KEY, AGG_KEY];
+      for (const k of keys) {
+        localStorage.removeItem(k);
+      }
+      // Reset modern record list to empty array
+      localStorage.setItem(REC_KEY, '[]');
+    } catch (e) {}
+    if (!silent) alert('記録を消去しました');
+    recordList.innerHTML = '（まだ きろく が ありません）';
+    pendingList.innerHTML = '';
+    setTimeout(() => { renderRecords(); renderPending(); }, 0);
+  }
+  // Buttons
+  startBtn.onclick=start;
+  resetBtn.onclick=resetAll;
+  playBtn.onclick=()=>{ if(current) speakKana(current); };
+  replayBtn.onclick=()=>{ if(current) speakKana(current); };
+  recordToggle.onclick=()=>{ recordPanel.style.display=(recordPanel.style.display==='block')?'none':'block'; if(recordPanel.style.display==='block') renderRecords(); };
+  refreshRec.onclick=renderRecords;
+  clearRec.onclick=()=>{ if(confirm('ぜんぶ消しますか？')) clearAllRecords(false); };
+
+  // Toggle the grading pending panel
+  if (pendingToggle) {
+    pendingToggle.onclick = () => {
+      pendingPanel.style.display = (pendingPanel.style.display === 'block') ? 'none' : 'block';
+      if (pendingPanel.style.display === 'block') {
+        renderPending();
+      }
+    };
+  }
+
+  // Submit button for teacher mode
+  submitBtn.onclick = () => {
+    if(!running) return;
+    // Only work in teacher mode and hand writing
+    if(mode !== 'hand' || evalMethod !== 'teacher') return;
+    // Ensure canvas size
+    ensureCanvasReady();
+    // Create offscreen canvas to capture drawing
+    const off = document.createElement('canvas');
+    off.width = canvas.width;
+    off.height = canvas.height;
+    const oc = off.getContext('2d');
+    // Fill white background
+    oc.fillStyle = '#fff';
+    oc.fillRect(0,0,off.width,off.height);
+    oc.drawImage(canvas, 0, 0);
+    const dataUrl = off.toDataURL('image/png');
+    const now = new Date();
+    const ja = now.toLocaleString('ja-JP', { timeZone:'Asia/Tokyo' });
+    // Include a unique id for matching when grading later
+    const sub = { id: Date.now().toString() + Math.random().toString(36).slice(2), sessionId: currentSessionId, total: currentTotal, date: ja, script, setKind, char: current, image: dataUrl };
+    addSubmission(sub);
+    // Reset current drawing and proceed to next question
+    paths = [];
+    currentPath = [];
+    nextQuestion();
+  };
+  // Attach handler for the settings button. Show the dialog with fallback for browsers that lack showModal().
+  openSettingsBtn.onclick = () => {
+    const v = parseInt(localStorage.getItem('kana_leniency') || '4', 10) || 4;
+    leniencyRange.value = String(v);
+    lenVal.textContent = String(v);
+    if (settingsDlg && typeof settingsDlg.showModal === 'function') {
+      settingsDlg.showModal();
+    } else if (settingsDlg) {
+      // Fallback: mark the dialog as open and display it.
+      settingsDlg.setAttribute('open', 'true');
+      settingsDlg.style.display = 'block';
+    }
+  };
+  leniencyRange.addEventListener('input',()=>{ lenVal.textContent=leniencyRange.value; });
+  // Attach handler for saving settings. Persist leniency and close the dialog gracefully.
+  saveSettingsBtn.onclick = (e) => {
+    e.preventDefault();
+    localStorage.setItem('kana_leniency', String(leniencyRange.value));
+    if (settingsDlg && typeof settingsDlg.close === 'function') {
+      settingsDlg.close();
+    } else if (settingsDlg) {
+      settingsDlg.removeAttribute('open');
+      settingsDlg.style.display = 'none';
+    }
+  };
+  // Init
+  ensureCanvasReady(); redraw();
+  </script>
+</body>
+</html>
