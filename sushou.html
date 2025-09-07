@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>かずトレーニング</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background: #fff7dc;
+      text-align: center;
+    }
+    h1 {
+      font-size: 2em;
+      margin-top: 20px;
+    }
+
+    /* ===== 共通ボタンUI（全ボタンにクリック動作） ===== */
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 1.2em;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.08s ease;
+      user-select: none;
+    }
+    .yellowBtn { background-color: #ffd700; }
+    button.clicked, button:active {
+      transform: translateY(2px) scale(0.98);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.2);
+      opacity: 0.95;
+    }
+
+    /* さんすうメニューへ戻るボタン */
+    .back-button {
+      margin-top: 40px;
+      font-size: 1em;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background-color: #ccc;
+    }
+
+    /* ===== 記録パネル ===== */
+    #recordPanel {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      width: 300px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #888;
+      padding: 15px;
+      display: none;
+      z-index: 100;
+      border-radius: 12px;
+      box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+    }
+    #recordMenu { display: flex; flex-direction: column; align-items: center; }
+    .recordButton, .backButton {
+      font-size: 1em; margin: 6px 0; background-color: #ffd700;
+    }
+    .recordSection {
+      width: 90vw; max-width: 800px; margin: 20px auto; background-color: #fff;
+      padding: 15px; border-radius: 12px; box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+      display: none;
+    }
+    .recordList { text-align: left; max-height: 150px; overflow-y: auto; font-size: 0.9em; margin-bottom: 10px; }
+    #recordMenu h2 { font-size: 1.5em; margin-bottom: 15px; color: #808080; }
+
+    /* ===== メインUI ===== */
+    #numberDisplay { font-size: 8em; margin: 30px 0; color: #000; min-height: 1.2em; }
+    .controls {
+      background: rgba(255,255,255,0.8);
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px 12px;
+      border-radius: 10px;
+      flex-wrap: wrap;
+    }
+    input[type="number"] {
+      width: 80px; font-size: 1em; padding: 5px; margin: 0 6px; border-radius: 8px; border: 1px solid #ccc;
+    }
+    #countDisplay { font-size: 1.2em; margin: 10px; }
+    #timerDisplay {
+      position: fixed; top: 10px; right: 20px; font-size: 2.2em;
+      background-color: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 10px;
+    }
+
+    /* ラジオボタン見た目（UI統一） */
+    .controls label {
+      display: inline-flex; align-items: center; gap: 8px;
+      background-color: #ffd700; border-radius: 12px; padding: 8px 14px; margin: 4px 0;
+      font-size: 1.2em; cursor: pointer; box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    .controls label:active { transform: translateY(2px) scale(0.98); box-shadow: 0 2px 0 rgba(0,0,0,0.15); }
+    .controls input[type="radio"] { display: none; }
+
+    #quizOption { display: none; margin-top: 20px; }
+    .optionBtn { font-size: 2em; margin: 10px; padding: 10px 20px; background-color: #ffd700; }
+
+    /* ===== ものモード用 10マス×2（最大20） ===== */
+    #objectDisplay { margin: 20px auto; width: 90%; display: flex; justify-content: center; }
+    .tenframe-wrap { display: flex; gap: 16px; align-items: center; justify-content: center; }
+    .tenframe {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(32px, 52px));
+      grid-auto-rows: minmax(32px, 52px);
+      background: #fff;
+      border: 3px solid #333;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .cell {
+      border-right: 2px solid #333;
+      border-bottom: 2px solid #333;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tenframe .cell:nth-child(5n) { border-right: none; }
+    .pikachu { max-width: 85%; max-height: 85%; height: auto; }
+    .bounce { animation: bounce 0.5s ease; }
+    @keyframes bounce { 0%{transform:translateY(0)}50%{transform:translateY(-14px)}100%{transform:translateY(0)} }
+
+    canvas {
+      width: 100% !important; height: auto !important; max-width: 700px; margin: 20px auto;
+      background-color: #fff; border: 1px solid #ccc; border-radius: 8px;
+    }
+      .tenframe .cell:nth-last-child(-n+5) { border-bottom: none; }
+  
+/* ===== レイアウト調整（要求対応） ===== */
+/* ① ものモード（visual）：マスを×1.5に拡大し中央配置 */
+body.mode-visual #objectDisplay .tenframe-wrap {
+  transform: scale(1.5);
+  transform-origin: center center;
+}
+/* wrap自体を中央揃え（保険） */
+body.mode-visual #objectDisplay { display: flex; justify-content: center; }
+
+/* ② こえモード（voice）：各パーツの相対位置は維持したまま中央配置 */
+body.mode-voice .controls { justify-content: center; }
+body.mode-voice #numberDisplay { margin-left: auto; margin-right: auto; }
+body.mode-voice #quizOption { margin-left: auto; margin-right: auto; display: inline-block; text-align: center; }
+body.mode-voice #countDisplay, body.mode-voice #scoreFinal { text-align: center; margin-left: auto; margin-right: auto; }
+
+
+/* ===== 位置調整（追加・上書き） ===== */
+/* ① ものモード：マス全体をさらに下へ */
+body.mode-visual #objectDisplay {
+  margin-top: 80px !important; /* 下げ量の調整はここで可能 */
+}
+
+/* ② こえモード：全体を等しく上へ（相対位置はそのまま） */
+body.mode-voice .controls,
+body.mode-voice #numberDisplay,
+body.mode-voice #quizOption,
+body.mode-voice #countDisplay,
+body.mode-voice #scoreFinal {
+  position: relative;
+  top: -50px; /* 上げ量の調整はここで可能 */
+}
+
+
+/* ===== 音声モードの設定バー位置修正 ===== */
+body.mode-voice .controls {
+  position: static !important;
+  top: auto !important;
+}
+
+
+/* ===== 正誤判定の見やすさ調整 ===== */
+#feedback {
+  color: #e60000 !important;      /* 濃い赤 */
+  font-size: 10em !important;     /* 大きく表示 */
+  line-height: 1 !important;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.15); /* 視認性を少し向上 */
+}
+
+
+/* ===== フィードバック位置：解答欄の上に確実に表示 ===== */
+#feedback { position: relative; z-index: 5; margin: 10px 0; pointer-events: none; }
+
+</style>
+</head>
+<body>
+  <!-- 記録パネル（トグルは別実装を想定、UIのみ残置） -->
+  <div id="recordPanel">
+    <div id="recordMenu">
+      <h2 style="margin-bottom: 10px;">きろく📊</h2>
+      <button class="recordButton">🍎もの</button>
+      <button class="recordButton">🗣️こえ</button>
+      <button class="backButton">とじる</button>
+    </div>
+
+    <div id="recordSection_visual" class="recordSection">
+      <h3>🍎 ものモードのきろく</h3>
+      <div id="recordList_visual" class="recordList"></div>
+      <canvas id="recordChart_visual" width="700" height="250"></canvas>
+      <button class="backButton">もどる</button>
+    </div>
+
+    <div id="recordSection_voice" class="recordSection">
+      <h3>🗣️ こえモードのきろく</h3>
+      <div id="recordList_voice" class="recordList"></div>
+      <canvas id="recordChart_voice" width="700" height="250"></canvas>
+      <button class="backButton">もどる</button>
+    </div>
+  </div>
+
+  <h1>かずトレーニング</h1>
+
+  <div class="controls">
+    さいしょう:<input type="number" id="min" value="1">
+    さいだい:<input type="number" id="max" value="20">
+    じかん:<input type="number" id="duration" value="120">
+    <label><input type="radio" name="mode" value="number" checked> 🔢すうじだけ</label>
+    <label><input type="radio" name="mode" value="visual"> 🍎もの</label>
+    <label><input type="radio" name="mode" value="voice"> 🗣️こえ</label>
+    <button id="startBtn" class="yellowBtn">▶︎ スタート</button>
+    <button id="resetBtn" class="yellowBtn">↺ リセット</button>
+  </div>
+
+  <div id="objectDisplay"></div>
+  <div id="numberDisplay"></div>
+  <div id="countDisplay">クリック回数: 0</div>
+  <div id="timerDisplay">のこり：0びょう</div>
+  <div id="scoreFinal"></div>
+
+  
+
+  <div id="feedback">〇</div>
+
+
+<div id="quizOption">
+    <input type="number" id="answerInput" placeholder="こたえをいれてね" style="font-size: 2em; padding: 10px; display: none;">
+    <div id="optionContainer"></div>
+  
+  <div id="replayArea" style="margin-top: 12px; text-align: center;">
+    <button id="replayBtn" class="yellowBtn" style="display:none">▶︎ もういっかい きく</button>
+  </div>
+</div><script>
+
+/* ===== JS: かずトレーニング ===== */
+const recordKeys = { visual: "records_visual", voice: "records_voice" };
+
+let clickCount = 0, correctCount = 0, wrongCount = 0;
+let timer, timerInterval, isRunning = false, correctAnswer;
+
+const minInput = document.getElementById('min');
+const maxInput = document.getElementById('max');
+const durationInput = document.getElementById('duration');
+const numberDisplay = document.getElementById('numberDisplay');
+const countDisplay = document.getElementById('countDisplay');
+const timerDisplay = document.getElementById('timerDisplay');
+const objectDisplay = document.getElementById('objectDisplay');
+const feedback = document.getElementById('feedback');
+const quizOption = document.getElementById('quizOption');
+const optionContainer = document.getElementById('optionContainer');
+const scoreFinal = document.getElementById('scoreFinal');
+const answerInput = document.getElementById('answerInput');
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
+const replayBtn = document.getElementById('replayBtn');
+let currentVoiceNumber = null;
+let feedbackTimer = null;
+
+/* —— 全ボタンにクリック動作（アニメーション）を適用 —— */
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button');
+  if (!btn) return;
+  btn.classList.add('clicked');
+  setTimeout(() => btn.classList.remove('clicked'), 120);
+}, true);
+
+/* ===== 記録機能（省略） ===== */
+function updateModeClass() {
+  const m = document.querySelector('input[name="mode"]:checked').value;
+  document.body.classList.remove('mode-number','mode-visual','mode-voice');
+  document.body.classList.add('mode-' + m);
+}
+
+function saveRecord(mode, correct, wrong) {
+  if (!recordKeys[mode]) return;
+  const now = new Date().toLocaleDateString('ja-JP');
+  let key = recordKeys[mode];
+  let records = JSON.parse(localStorage.getItem(key) || "[]");
+  records.push({ date: now, correct: correct, wrong: wrong });
+  if (records.length > 30) records.shift();
+  localStorage.setItem(key, JSON.stringify(records));
+}
+
+function renderChart(records, chartId) {
+  const ctx = document.getElementById(chartId).getContext('2d');
+  const labels = records.map(r => r.date);
+  const corrects = records.map(r => r.correct);
+  const wrongs = records.map(r => r.wrong);
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: '正解', data: corrects, backgroundColor: 'green' },
+        { label: '不正解', data: wrongs, backgroundColor: 'red' }
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+/* ===== ものモード：10マス×2の描画 ===== */
+function renderTenFrames(n) {
+  objectDisplay.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'tenframe-wrap';
+
+  const frame1 = document.createElement('div');
+  frame1.className = 'tenframe';
+  const frame2 = document.createElement('div');
+  frame2.className = 'tenframe';
+
+  // 合計20セルを順に埋める（frame1: 0-9, frame2: 10-19）
+  for (let i = 0; i < 10; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    if (i < Math.min(n, 10)) {
+      const img = document.createElement('img');
+      img.src = "ゲンガーイラスト.png";
+      img.className = "pikachu";
+      cell.appendChild(img);
+    }
+    frame1.appendChild(cell);
+  }
+  for (let i = 10; i < 20; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    if (i < n) {
+      const img = document.createElement('img');
+      img.src = "ゲンガーイラスト.png";
+      img.className = "pikachu";
+      cell.appendChild(img);
+    }
+    frame2.appendChild(cell);
+  }
+
+  wrap.appendChild(frame1);
+  wrap.appendChild(frame2);
+  objectDisplay.appendChild(wrap);
+}
+
+/* ===== 出題ロジック ===== */
+function speakNumber(num) {
+  if (window.speechSynthesis) {
+    speechSynthesis.cancel();
+  }
+  const utterance = new SpeechSynthesisUtterance(String(num));
+  utterance.lang = 'ja-JP';
+  speechSynthesis.speak(utterance);
+}
+
+function getRandomNumber(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function showFeedback(mark) {
+  const fb = document.getElementById('feedback');
+  fb.textContent = mark;
+  fb.style.display = 'block';
+  fb.classList.add('bounce');
+  if (feedbackTimer) { clearTimeout(feedbackTimer); }
+  feedbackTimer = setTimeout(() => {
+    fb.style.display = 'none';
+    fb.classList.remove('bounce');
+  }, 500);
+}
+function showQuiz(number, min, max) {
+  correctAnswer = number;
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+
+  answerInput.style.display = 'none';
+  answerInput.value = '';
+  optionContainer.innerHTML = '';
+  quizOption.style.display = 'block';
+  objectDisplay.innerHTML = '';
+  numberDisplay.textContent = '';
+
+  if (mode === "voice") {
+    currentVoiceNumber = number;
+    speakNumber(number);
+    replayBtn.style.display = "inline-block";
+  } else if (mode === "visual") {
+    // 最大20に制限したレイアウト
+    renderTenFrames(number);
+
+    answerInput.style.display = 'inline-block';
+    answerInput.placeholder = "こたえをいれてね";
+    answerInput.focus();
+
+    answerInput.onkeydown = (e) => {
+      if (e.key === "Enter" && isRunning) {
+        const input = parseInt(answerInput.value);
+        if (input === correctAnswer) {
+          correctCount++;
+          showFeedback("〇");
+          document.querySelectorAll('.pikachu').forEach(p => {
+            p.classList.add('bounce');
+            setTimeout(() => p.classList.remove('bounce'), 500);
+          });
+          objectDisplay.innerHTML = '';
+          answerInput.style.display = 'none';
+          numberDisplay.textContent = '';
+          quizOption.style.display = 'none';
+          setTimeout(nextStep, 700);
+        } else {
+          wrongCount++;
+          showFeedback("×");
+          answerInput.value = '';
+        }
+      }
+    };
+  } else {
+    numberDisplay.textContent = number;
+    quizOption.style.display = 'none';
+    replayBtn.style.display = "none";
+    currentVoiceNumber = null;
+  }
+
+  if (mode !== "visual") {
+    let optionCount = (mode === "voice") ? 5 : 3;
+    let options = [number];
+    while (options.length < optionCount) {
+      let rand = getRandomNumber(min, max);
+      if (!options.includes(rand)) options.push(rand);
+    }
+    shuffle(options);
+    options.forEach(num => {
+      const btn = document.createElement('button');
+      btn.className = 'optionBtn';
+      btn.textContent = num;
+      btn.onclick = () => {
+        if (!isRunning) return;
+        if (num === correctAnswer) {
+          correctCount++;
+          showFeedback("〇");
+          objectDisplay.innerHTML = '';
+          numberDisplay.textContent = '';
+          quizOption.style.display = 'none';
+          setTimeout(nextStep, 700);
+        } else {
+          wrongCount++;
+          showFeedback("×");
+        }
+      };
+      optionContainer.appendChild(btn);
+    });
+  }
+}
+
+/* ===== 操作 ===== */
+function startTraining() {
+  const min = parseInt(minInput.value);
+  let max = parseInt(maxInput.value);
+  const duration = parseInt(durationInput.value);
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+
+  // ものモードは最大20に強制
+  if (mode === 'visual' && max > 20) {
+    max = 20;
+    maxInput.value = 20;
+  }
+  if (mode === 'visual' && min > 20) {
+    alert('ものモードの さいしょう は 20 までです。値を見直してください。');
+    return;
+  }
+
+  if (isNaN(min) || isNaN(max) || min > max || isNaN(duration) || duration <= 0) {
+    alert('有効な数値を入力してください。');
+    return;
+  }
+
+  clickCount = 0; correctCount = 0; wrongCount = 0;
+  countDisplay.textContent = "クリック回数: 0";
+  numberDisplay.textContent = "";
+  quizOption.style.display = "none";
+  scoreFinal.style.display = "none";
+  isRunning = true;
+  if (document.querySelector('input[name="mode"]:checked').value !== 'voice') { replayBtn.style.display = 'none'; currentVoiceNumber = null; }
+
+  let remainingTime = duration;
+  timerDisplay.textContent = `のこり：${remainingTime}びょう`;
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    remainingTime--;
+    timerDisplay.textContent = `のこり：${remainingTime}びょう`;
+    if (remainingTime <= 0) clearInterval(timerInterval);
+  }, 1000);
+
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => {
+    isRunning = false;
+    numberDisplay.textContent = '終了';
+    quizOption.style.display = 'none';
+    objectDisplay.innerHTML = '';
+    replayBtn.style.display = 'none';
+    currentVoiceNumber = null;
+    if (mode !== "number") {
+      scoreFinal.style.display = 'block';
+      scoreFinal.textContent = `〇：${correctCount}個　×：${wrongCount}個`;
+      saveRecord(mode, correctCount, wrongCount);
+    } else {
+      scoreFinal.style.display = 'none';
+    }
+    clearInterval(timerInterval);
+  }, duration * 1000);
+  nextStep();
+}
+
+function resetTraining() {
+  replayBtn.style.display = 'none';
+  currentVoiceNumber = null;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  isRunning = false;
+  clearInterval(timerInterval);
+  clearTimeout(timer);
+  clickCount = 0; correctCount = 0; wrongCount = 0;
+
+  objectDisplay.innerHTML = '';
+  optionContainer.innerHTML = '';
+  quizOption.style.display = 'none';
+  feedback.style.display = 'none';
+  scoreFinal.style.display = 'none';
+  numberDisplay.textContent = '';
+  answerInput.value = '';
+  answerInput.style.display = 'none';
+
+  countDisplay.textContent = "クリック回数: 0";
+  timerDisplay.textContent = "のこり：0びょう";
+}
+
+function nextStep() {
+  if (!isRunning) return;
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const min = parseInt(minInput.value);
+  let max = parseInt(maxInput.value);
+  if (mode === 'visual') max = Math.min(max, 20);
+  clickCount++;
+  countDisplay.textContent = `クリック回数: ${clickCount}`;
+  const num = getRandomNumber(min, max);
+  showQuiz(num, min, max);
+}
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+/* エンターキーで開始（従来仕様保持）＆ number モード時のみ次へ */
+document.addEventListener('keydown', (event) => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  if (event.key === 'Enter') {
+    if (!isRunning) {
+      startTraining();
+    } else if (mode === 'number') {
+      nextStep();
+    }
+  }
+});
+
+/* 画面クリックで nextStep（number モードのみ） */
+document.addEventListener('click', (e) => {
+  if (!isRunning) return;
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const ignore = e.target.closest('#recordPanel, .controls, .recordButton, .backButton, .optionBtn');
+  if (mode === 'number' && !ignore) nextStep();
+});
+
+/* スタート／リセット */
+startBtn.addEventListener('click', () => { if (!isRunning) startTraining(); });
+resetBtn.addEventListener('click', resetTraining);
+
+// もういっかい きく（こえモード専用）
+replayBtn.addEventListener('click', () => {
+  if (!isRunning || currentVoiceNumber === null) return;
+  speakNumber(currentVoiceNumber);
+});
+
+/* モード切替時：ものモードは さいだい を 20 に制限 */
+document.querySelectorAll('input[name="mode"]').forEach(r => {
+  r.addEventListener('change', () => {
+    updateModeClass();
+    if (r.checked && r.value !== 'voice') { replayBtn.style.display = 'none'; currentVoiceNumber = null; }
+    if (r.checked && r.value === 'visual') {
+      maxInput.setAttribute('max', '20');
+      if (parseInt(maxInput.value) > 20) maxInput.value = 20;
+    } else if (r.checked) {
+      maxInput.removeAttribute('max');
+    }
+  });
+});
+
+// 初期モードのクラス付与
+updateModeClass();
+
+</script>
+  <button class="back-button" onclick="location.href='算数.html'">さんすうがめんにもどる</button>
+</body>
+</html>
