@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>いろフラッシュカード</title>
+  <!-- 修正点:
+    1) 重複していた </style> を削除
+    2) リセットボタンを実装（タイマー停止・UI初期化）
+    3) 「いろ→しろ」2段階の案内を、消えない案内(#instruction)に分離
+    4) 解答受付は実行中(isRunning)のみ（終了後の誤操作防止）
+    5) 共通ボタンUIの軽いクリック演出
+  -->
+  <style>
+    /* ベース */
+    body {
+      background-color: #fff7dc;
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 { font-size: 2em; margin-bottom: 10px; }
+
+    /* コントロール */
+    .controls { margin: 20px 0; }
+    .controls select,
+    .controls input[type="number"],
+    .controls button {
+      font-size: 1.5em;
+      padding: 10px 20px;
+      border-radius: 12px;
+      background-color: #ffd700;
+      border: none;
+      cursor: pointer;
+      margin: 5px;
+      transition: transform 0.1s ease;
+    }
+    .controls input[type="number"] { width: 80px; }
+
+    /* 共通ボタンのクリック演出 */
+    button:active, .optionBtn:active { transform: scale(0.95); }
+
+    /* カード表示 */
+    #cardArea { margin: 20px auto; }
+    table { border-collapse: collapse; margin: 0 auto; }
+    td {
+      width: 60px; height: 60px;
+      border: 1px solid #000;
+      background: #fff;
+    }
+
+    /* 選択肢 */
+    .optionBtn {
+      background-color: #ffd700;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 1.5em;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    /* フィードバック（〇/×） */
+    #feedback {
+      font-size: 5em;
+      color: #e60000;
+      display: none;
+      margin-top: 10px;
+      line-height: 1;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+
+    /* 2段階出題の案内（常時表示用） */
+    #instruction {
+      font-size: 1.4em;
+      color: #333;
+      min-height: 1.6em;
+      margin-top: 8px;
+    }
+
+    /* タイマー */
+    #timerDisplay {
+      position: fixed;
+      top: 10px; right: 20px;
+      font-size: 2.4em;
+      background: rgba(255,255,255,0.7);
+      padding: 8px 16px;
+      border-radius: 10px;
+    }
+
+    /* 戻るボタン */
+    .back-button {
+      margin-top: 40px;
+      font-size: 1em;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background-color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>いろフラッシュカード</h1>
+
+  <div class="controls">
+    じかん:<input type="number" id="durationInput" value="120" min="1">
+    形式:
+    <select id="modeSelect">
+      <option value="colorOnly">いろだけ</option>
+      <option value="whiteOnly">しろだけ</option>
+      <option value="both">いろ→しろ</option>
+    </select>
+    色の設定:
+    <select id="styleSelect">
+      <option value="single">ひとつのいろ</option>
+      <option value="multi">ランダム</option>
+    </select>
+    いろ:
+    <select id="colorSelect">
+      <option value="red">🔴</option>
+      <option value="blue">🔵</option>
+      <option value="green">🟢</option>
+      <option value="yellow">🟡</option>
+    </select>
+    <button id="startBtn">スタート</button>
+    <button id="resetBtn">↺ リセット</button>
+  </div>
+
+  <div id="timerDisplay">のこり：0びょう</div>
+  <div id="instruction"></div>
+  <div id="cardArea"></div>
+  <div id="options"></div>
+  <div id="feedback">〇</div>
+
+  <script>
+    const cardArea = document.getElementById('cardArea');
+    const optionsDiv = document.getElementById('options');
+    const feedback = document.getElementById('feedback');
+    const instruction = document.getElementById('instruction');
+    const modeSelect = document.getElementById('modeSelect');
+    const styleSelect = document.getElementById('styleSelect');
+    const colorSelect = document.getElementById('colorSelect');
+    const durationInput = document.getElementById('durationInput');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const startBtn = document.getElementById('startBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    let colorCount = 0;
+    let whiteCount = 0;
+    let step = 0; // bothモードの段階 0=色, 1=白
+    let isRunning = false;
+    let timer = null;
+    let timerInterval = null;
+
+    function getRandomInt(max) {
+      return Math.floor(Math.random() * (max + 1)); // 0..max
+    }
+    function getRandomColor() {
+      const colors = ["red", "blue", "green", "yellow"];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function generateCard(count, color) {
+      cardArea.innerHTML = '';
+      const table = document.createElement('table');
+      let idx = 0;
+      for (let row = 0; row < 2; row++) {
+        const tr = document.createElement('tr');
+        for (let col = 0; col < 5; col++) {
+          const td = document.createElement('td');
+          td.style.backgroundColor = (idx < count) ? color : '#fff';
+          tr.appendChild(td);
+          idx++;
+        }
+        table.appendChild(tr);
+      }
+      cardArea.appendChild(table);
+    }
+
+    function showMark(mark) {
+      feedback.textContent = mark;
+      feedback.style.display = 'block';
+      setTimeout(() => { feedback.style.display = 'none'; }, 800);
+    }
+
+    function setInstruction(text) {
+      instruction.textContent = text || "";
+    }
+
+    function createOptions(correct) {
+      optionsDiv.innerHTML = '';
+      const answers = [correct];
+      while (answers.length < 5) {
+        let rand = getRandomInt(10); // 0..10
+        if (!answers.includes(rand)) answers.push(rand);
+      }
+      shuffle(answers).forEach(num => {
+        const btn = document.createElement('button');
+        btn.className = 'optionBtn';
+        btn.textContent = num;
+        btn.onclick = () => handleAnswer(num);
+        optionsDiv.appendChild(btn);
+      });
+    }
+
+    function handleAnswer(num) {
+      if (!isRunning) return;
+      const mode = modeSelect.value;
+      const expected = (mode === "whiteOnly" || (mode === "both" && step === 1)) ? whiteCount : colorCount;
+
+      if (num === expected) {
+        showMark("〇");
+        if (mode === "both" && step === 0) {
+          step = 1;
+          setInstruction("つぎは　しろの　かずを　えらんでね");
+          createOptions(whiteCount);
+        } else {
+          nextCard();
+        }
+      } else {
+        showMark("×");
+      }
+    }
+
+    function nextCard() {
+      step = 0;
+      setInstruction(""); // 案内リセット
+      colorCount = getRandomInt(10);
+      whiteCount = 10 - colorCount;
+      const style = styleSelect.value;
+      const selectedColor = (style === "multi") ? getRandomColor() : colorSelect.value;
+      generateCard(colorCount, selectedColor);
+
+      const mode = modeSelect.value;
+      if (mode === "colorOnly") {
+        createOptions(colorCount);
+      } else if (mode === "whiteOnly") {
+        createOptions(whiteCount);
+      } else {
+        setInstruction("はじめに　いろの　かずを　えらんでね");
+        createOptions(colorCount);
+      }
+    }
+
+    function startSession() {
+      const duration = parseInt(durationInput.value);
+      if (isNaN(duration) || duration <= 0) {
+        alert("有効な時間を入力してください");
+        return;
+      }
+      clearTimers();
+      isRunning = true;
+      timerDisplay.textContent = `のこり：${duration}びょう`;
+      nextCard();
+
+      let remaining = duration;
+      timerInterval = setInterval(() => {
+        remaining--;
+        timerDisplay.textContent = `のこり：${remaining}びょう`;
+        if (remaining <= 0) clearInterval(timerInterval);
+      }, 1000);
+
+      timer = setTimeout(() => {
+        isRunning = false;
+        optionsDiv.innerHTML = '';
+        cardArea.innerHTML = '';
+        setInstruction("");
+      }, duration * 1000);
+    }
+
+    function clearTimers() {
+      if (timerInterval) clearInterval(timerInterval);
+      if (timer) clearTimeout(timer);
+      timerInterval = null;
+      timer = null;
+    }
+
+    function resetSession() {
+      isRunning = false;
+      clearTimers();
+      colorCount = 0;
+      whiteCount = 0;
+      step = 0;
+      cardArea.innerHTML = '';
+      optionsDiv.innerHTML = '';
+      setInstruction("");
+      feedback.style.display = 'none';
+      timerDisplay.textContent = 'のこり：0びょう';
+    }
+
+    // ボタン
+    startBtn.addEventListener('click', startSession);
+    resetBtn.addEventListener('click', resetSession);
+  </script>
+
+  <button class="back-button" onclick="location.href='算数.html'">さんすうがめんにもどる</button>
+</body>
+</html>
